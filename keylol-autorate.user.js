@@ -3,7 +3,7 @@
 // @namespace    Keylol
 // @include      https://keylol.com/*
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
-// @version      1.0.1
+// @version      1.0.2
 // @icon         https://raw.githubusercontent.com/ohperhaps/Keylol-Autorate/master/img/konoha.png
 // @downloadURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
 // @updateURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
@@ -107,6 +107,7 @@
         return Promise.all([getCollections(), getUserCredit(selfUid)]).then((results) => {
             let total = results[1].total
             while(total > 0 ) {
+                if (results[0].length === 0) { break }
                 for(let item of results[0]) {
                     if (total < 1) { break } else {
                         if (item.score >= item.remain) { continue }

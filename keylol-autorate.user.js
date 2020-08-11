@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Keylol-Autorate
 // @namespace    Keylol
-// @include      https://keylol.com/
+// @include      https://keylol.com/*
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
 // @version      1.0
-// @icon         https://github.com/ohperhaps/Keylol-Autorate/blob/master/img/konoha.png
-// @downloadURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.js
-// @updateURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.js
+// @icon         https://raw.githubusercontent.com/ohperhaps/Keylol-Autorate/master/img/konoha.png
+// @downloadURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
+// @updateURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
 // @description  Keylol forum autorate tool
 // @author       ohperhaps
 // @grant        unsafeWindow

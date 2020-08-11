@@ -3,7 +3,7 @@
 ## 安装
 1.安装 [Tampermonkey](https://tampermonkey.net/)
 
-2.[点击安装](https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.js) 脚本 
+2.[点击安装](https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js) 脚本 
 
 ## 使用
 1.收藏需要加体力用户的帖子，收藏说明按照`已加体力/全部体力`格式填写

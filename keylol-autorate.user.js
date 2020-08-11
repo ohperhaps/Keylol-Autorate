@@ -3,7 +3,7 @@
 // @namespace    Keylol
 // @include      https://keylol.com/*
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
-// @version      1.0
+// @version      1.0.1
 // @icon         https://raw.githubusercontent.com/ohperhaps/Keylol-Autorate/master/img/konoha.png
 // @downloadURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
 // @updateURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
@@ -46,22 +46,45 @@
             return value1 - value2;
         }
     }
+    async function getUserScore() {
+        let threads = await xhrAsync(`forum.php?mod=guide&view=newthread`).then((res) => {
+            let threads = new Array()
+            $("div.bm_c", res.response).find("tbody").each(function () { threads.push($(this).attr("id").split("_").pop()) })
+            return threads })
+        body:
+        for (let thread of threads) {
+            let posts = await xhrAsync(`t${thread}-1-1`).then((res) => {
+                let posts = new Array()
+                $("#postlist > div[id^=post_]", res.response).each(function () { posts.push($(this).attr("id").split("_").pop()) })
+                return posts
+            })
+            for (let post of posts) {
+                let ts = (new Date()).getTime()
+                let score = await xhrAsync(`forum.php?mod=misc&action=rate&tid=${thread}&pid=${post}&infloat=yes&handlekey=rate&t=${ts}&inajax=1&ajaxtarget=fwin_content_rate`).then((res) => {
+                    return $("table.dt.mbm td:last", res.response).text()
+                })
+                if (/^\d+$/.test(score)) { return parseInt(score) }
+            }
+        }
+    }
     function getUserCredit(uid) {
         let creditBox = {
-            "30": { step: 0, total: 0},
-            "31": { step: 0, total: 0},
-            "32": { step: 1, total: 3},
-            "33": { step: 2, total: 5},
-            "34": { step: 2, total: 8},
-            "35": { step: 3, total: 10},
-            "36": { step: 3, total: 15},
-            "37": { step: 4, total: 15},
-            "51": { step: 5, total: 15},
-            "52": { step: 0, total: 0},
+            "30": { step: 0},
+            "31": { step: 0},
+            "32": { step: 1},
+            "33": { step: 2},
+            "34": { step: 2},
+            "35": { step: 3},
+            "36": { step: 3},
+            "37": { step: 4},
+            "51": { step: 5},
+            "52": { step: 0},
         }
-        return xhrAsync(`suid-${uid}`).then((res) => {
-            let gid = $("span.xi2", res.response).find("a").attr("href").split("=").pop()
-            return creditBox[gid]
+        return Promise.all([xhrAsync(`suid-${uid}`), getUserScore()]).then((results) => {
+            let gid = $("span.xi2", results[0].response).find("a").attr("href").split("=").pop()
+            let credits = creditBox[gid]
+            credits.total = results[1]
+            return credits
         })
     }
     function getCollections() {
@@ -162,6 +185,7 @@
                             item.quote = new_quote
                             message.push(`tid: ${reply.tid}  pid: ${reply.pid} score: ${attend} reason:${new_quote}\n`)
                         } else if (rate_result === 'exceeded') {
+                            updateQuote(item.favid, item.quote)
                             message.push('无剩余体力,24小时评分数超过限制\n')
                             break body
                         }

@@ -3,7 +3,7 @@
 // @namespace    Keylol
 // @include      https://keylol.com/*
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
-// @version      1.0.2
+// @version      1.0.3
 // @icon         https://raw.githubusercontent.com/ohperhaps/Keylol-Autorate/master/img/konoha.png
 // @downloadURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
 // @updateURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
@@ -13,6 +13,19 @@
 // @grant        GM_xmlhttpRequest
 // @run-at       document-end
 // ==/UserScript==
+/*
+更新日志：
+1.version 1.0.1（2020-08-11）(感谢 @安安姬 @Opalus）
+   a.解决体力不满加体力的问题，加体力前将先获取剩余体力。
+   b.解决某些情况下收藏说明没有更新的问题
+
+2.version 1.0.2（2020-08-11）(感谢 @bokutaki @hmh28 @skiliey @安安姬)
+   a.解决无符合格式的收藏说明时，点击AutoRate页面卡死的问题
+
+3.version 1.0.3 (2020-08-12) （感谢 @Zayne. @zjiang322 ）
+   a.增加用户名显示
+   b.增加无体力可加时的提示信息
+ */
 (function() {
     'use strict';
     const $ = unsafeWindow.jQuery;
@@ -95,6 +108,7 @@
                 if (quote) {
                     collections.push({favid: $(this).attr("id").split("_").pop(),
                                       uid: $("[href^='suid']", this).attr("href").split("-").pop(),
+                                      username: $("[href^='suid']", this).text(),
                                       quote: quote[0],
                                       remain: quote[1],
                                       score: 0})
@@ -116,7 +130,7 @@
                 }
             }
             results[0].forEach(function (item) {item.step = results[1].step})
-            return results[0]
+            return [results[0], results[1].total]
         })
     }
     function getUserReplys(uid, page=1) {
@@ -157,9 +171,7 @@
         formData.append("score1", score)
         formData.append("reason", reason)
         return xhrAsync(`forum.php?mod=misc&action=rate&ratesubmit=yes&infloat=yes&inajax=1`, "POST", formData).then((res) => {
-            console.log(res)
             if (res.responseText.indexOf('succeedhandle_rate') !== -1) {
-                console.log('tid:'+ tid, 'pid:' + pid, 'score:' + score, 'reason:' + reason)
                 return ('successful')
             } else if (res.responseText.indexOf('errorhandle_rate') && res.responseText.indexOf('24 小时评分数超过限制')) {
                 return ('exceeded')
@@ -172,8 +184,10 @@
     }
     async function main() {
         let message = []
+        let itemScores = await calcScores()
         body:
-        for (let item of await calcScores()) {
+        for (let item of itemScores[0]) {
+            if (itemScores[1] === 0) { message.push('无剩余体力,24小时评分数超过限制\n'); break }
             leg:
             for(let page = 1; page < 30; page++) {
                 for(let reply of await getUserReplys(item.uid, page)) {
@@ -184,7 +198,7 @@
                         if (rate_result === 'successful') {
                             item.score -= attend
                             item.quote = new_quote
-                            message.push(`tid: ${reply.tid}  pid: ${reply.pid} score: ${attend} reason:${new_quote}\n`)
+                            message.push(`user: ${item.username} tid: ${reply.tid}  pid: ${reply.pid} score: ${attend} reason:${new_quote}\n`)
                         } else if (rate_result === 'exceeded') {
                             updateQuote(item.favid, item.quote)
                             message.push('无剩余体力,24小时评分数超过限制\n')

@@ -3,7 +3,7 @@
 // @namespace    Keylol
 // @include      https://keylol.com/*
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
-// @version      1.0.3
+// @version      1.0.4
 // @icon         https://raw.githubusercontent.com/ohperhaps/Keylol-Autorate/master/img/konoha.png
 // @downloadURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
 // @updateURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
@@ -22,9 +22,12 @@
 2.version 1.0.2（2020-08-11）(感谢 @bokutaki @hmh28 @skiliey @安安姬)
    a.解决无符合格式的收藏说明时，点击AutoRate页面卡死的问题
 
-3.version 1.0.3 (2020-08-12) （感谢 @Zayne. @zjiang322 ）
+3.version 1.0.3 (2020-08-12) （感谢 @Zayne. @zjiang322）
    a.增加用户名显示
    b.增加无体力可加时的提示信息
+4.version 1.0.4 (2020-08-13) (感谢 @虫虫大作战 )
+   a.修复代码逻辑错误造成的体力未加完的情况
+   b.修改提示信息，增加控制台debug信息
  */
 (function() {
     'use strict';
@@ -173,9 +176,9 @@
         return xhrAsync(`forum.php?mod=misc&action=rate&ratesubmit=yes&infloat=yes&inajax=1`, "POST", formData).then((res) => {
             if (res.responseText.indexOf('succeedhandle_rate') !== -1) {
                 return ('successful')
-            } else if (res.responseText.indexOf('errorhandle_rate') && res.responseText.indexOf('24 小时评分数超过限制')) {
+            } else if (res.responseText.indexOf('errorhandle_rate') && res.responseText.indexOf('24 小时评分数超过限制') !== -1) {
                 return ('exceeded')
-            } else if (res.responseText.indexOf('errorhandle_rate') && res.responseText.indexOf('您不能对同一个帖子重复评分')) {
+            } else if (res.responseText.indexOf('errorhandle_rate') && res.responseText.indexOf('您不能对同一个帖子重复评分') !== -1) {
                 return ('failed')
             } else {
                 return ('Unknown')
@@ -185,12 +188,15 @@
     async function main() {
         let message = []
         let itemScores = await calcScores()
+        console.log(itemScores)
         body:
         for (let item of itemScores[0]) {
-            if (itemScores[1] === 0) { message.push('无剩余体力,24小时评分数超过限制\n'); break }
+            if (itemScores[1] === 0) { message.push('当前无剩余体力！请稍后再尝试！\n'); break }
             leg:
             for(let page = 1; page < 30; page++) {
-                for(let reply of await getUserReplys(item.uid, page)) {
+                let replys = await getUserReplys(item.uid, page)
+                console.log([item.uid, page, replys])
+                for(let reply of replys) {
                     if (item.score > 0) {
                         let attend = Math.min(item.step, item.score)
                         let new_quote = formatQuote(item.quote, attend)[0]
@@ -201,7 +207,7 @@
                             message.push(`user: ${item.username} tid: ${reply.tid}  pid: ${reply.pid} score: ${attend} reason:${new_quote}\n`)
                         } else if (rate_result === 'exceeded') {
                             updateQuote(item.favid, item.quote)
-                            message.push('无剩余体力,24小时评分数超过限制\n')
+                            message.push('当前体力已全部加完!\n')
                             break body
                         }
                     } else {

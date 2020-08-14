@@ -3,7 +3,7 @@
 // @namespace    Keylol
 // @include      https://keylol.com/*
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
-// @version      1.0.5
+// @version      1.0.6
 // @icon         https://raw.githubusercontent.com/ohperhaps/Keylol-Autorate/master/img/konoha.png
 // @downloadURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
 // @updateURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
@@ -32,6 +32,10 @@
 
 5.version 1.0.5 (2020-08-13) (感谢 @丨OTZ丨_sqkUw )
    a.修复当前可加体力多于需要加体力时的崩溃问题
+
+6.version 1.0.6 (2020-08-14) (感谢 @圣所 )
+   a.更新用户页面获取用户组gid的逻辑
+   b.增加非晋级用户组单次配额无法获取时默认值
  */
 (function() {
     'use strict';
@@ -100,8 +104,8 @@
             "52": { step: 0},
         }
         return Promise.all([xhrAsync(`suid-${uid}`), getUserScore()]).then((results) => {
-            let gid = $("span.xi2", results[0].response).find("a").attr("href").split("=").pop()
-            let credits = creditBox[gid]
+            let gid = $("li:contains('用户组')", results[0].response).find("a").attr("href").split("=").pop()
+            let credits = creditBox[gid] || { step: 5 }
             credits.total = results[1]
             return credits
         })

@@ -105,7 +105,7 @@
         }
         return Promise.all([xhrAsync(`suid-${uid}`), getUserScore()]).then((results) => {
             let gid = $("li:contains('用户组')", results[0].response).find("a").attr("href").split("=").pop()
-            let credits = creditBox[gid] || { step: 5 }
+            let credits = creditBox[gid] || { step: 4 }
             credits.total = results[1]
             return credits
         })

@@ -3,7 +3,7 @@
 // @namespace    Keylol
 // @include      https://keylol.com/*
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
-// @version      1.0.6
+// @version      1.0.7
 // @icon         https://raw.githubusercontent.com/ohperhaps/Keylol-Autorate/master/img/konoha.png
 // @downloadURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
 // @updateURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
@@ -36,6 +36,10 @@
 6.version 1.0.6 (2020-08-14) (感谢 @圣所 )
    a.更新用户页面获取用户组gid的逻辑
    b.增加非晋级用户组单次配额无法获取时默认值
+
+7.version 1.0.7 (2020-08-19) (感谢 @695丶 )
+   a.修复在有多页收藏时只获取第一页收藏的问题
+
  */
 (function() {
     'use strict';
@@ -44,7 +48,7 @@
     const selfUid = $("li.dropdown").find("a").attr("href").split("-")[1]
     const formHash = $("[name=formhash]").val();
     function xhrAsync (url, method="GET", data="") {
-        if (method == "GET") {
+        if (method === "GET") {
             return new Promise((resolve, reject) => {
                 GM_xmlhttpRequest({
                     "method": "GET",
@@ -52,7 +56,7 @@
                     "onload": resolve
                 })
             })
-        } else if (method == "POST") {
+        } else if (method === "POST") {
             return new Promise((resolve, reject) => {
                 GM_xmlhttpRequest({
                     "method": "POST",
@@ -110,24 +114,29 @@
             return credits
         })
     }
-    function getCollections() {
-        return xhrAsync(`plugin.php?id=keylol_favorite_notification:favorite_enhance&formhash=${formHash}`).then((res) => {
-            let collections = []
-            $("#delform", res.response).find("tr").each(function () {
-                let quote = formatQuote($("span.favorite_quote.xi1", this).text())
-                if (quote) {
-                    collections.push({favid: $(this).attr("id").split("_").pop(),
-                                      uid: $("[href^='suid']", this).attr("href").split("-").pop(),
-                                      username: $("[href^='suid']", this).text(),
-                                      quote: quote[0],
-                                      remain: quote[1],
-                                      score: 0})
-                }
-            })
-            return collections.sort(compare('remain'))
-        })
+    async function getCollections() {
+        let collections = []
+        for(let page = 1; page <= 40; page++) {
+            let res = await xhrAsync(`plugin.php?id=keylol_favorite_notification:favorite_enhance&formhash=${formHash}&size=100&page=${page}`)
+            let cs = $("#delform", res.response).find("tr")
+            if (cs.length === 0) { break }
+            else {
+                cs.each(function () {
+                    let quote = formatQuote($("span.favorite_quote.xi1", this).text())
+                    if (quote) {
+                        collections.push({favid: $(this).attr("id").split("_").pop(),
+                                          uid: $("[href^='suid']", this).attr("href").split("-").pop(),
+                                          username: $("[href^='suid']", this).text(),
+                                          quote: quote[0],
+                                          remain: quote[1],
+                                          score: 0})
+                    }
+                })
+            }
+        }
+        return collections.sort(compare('remain'))
     }
-    async function calcScores() {
+    function calcScores() {
         return Promise.all([getCollections(), getUserCredit(selfUid)]).then((results) => {
             let total = results[1].total
             let calcFlag = results[0].length > 0
@@ -200,7 +209,7 @@
         for (let item of itemScores[0]) {
             if (itemScores[1] === 0) { message.push('当前无剩余体力！请稍后再尝试！\n'); break }
             leg:
-            for(let page = 1; page < 30; page++) {
+            for(let page = 1; page < 50; page++) {
                 let replys = await getUserReplys(item.uid, page)
                 console.log([item.uid, page, replys])
                 for(let reply of replys) {

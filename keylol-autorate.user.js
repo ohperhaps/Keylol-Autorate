@@ -5,9 +5,9 @@
 // @include      https://keylol.com/
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
 // @version      1.0.8-DreamNya
-// @icon         https://raw.githubusercontent.com/DreamNya/Keylol-Autorate/master/img/konoha.png
-// @downloadURL	 https://github.com/DreamNya/Keylol-Autorate/raw/master/keylol-autorate.user.js
-// @updateURL	 https://github.com/DreamNya/Keylol-Autorate/raw/master/keylol-autorate.user.js
+// @icon         https://github.com/DreamNya/Keylol-Autorate/blob/DreamNya-patch-1/img/konoha.png
+// @downloadURL	 https://github.com/DreamNya/Keylol-Autorate/blob/DreamNya-patch-1/keylol-autorate.user.js
+// @updateURL	 https://github.com/DreamNya/Keylol-Autorate/blob/DreamNya-patch-1/keylol-autorate.user.js
 // @description  Keylol forum autorate tool
 // @author       DreamNya
 // @grant        unsafeWindow

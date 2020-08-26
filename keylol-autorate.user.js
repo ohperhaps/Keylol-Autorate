@@ -1,46 +1,33 @@
 // ==UserScript==
 // @name         Keylol-Autorate
 // @namespace    Keylol
-// @include      https://keylol.com/*
+// @include      https://keylol.com/forum.php
+// @include      https://keylol.com/
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
-// @version      1.0.7
-// @icon         https://raw.githubusercontent.com/ohperhaps/Keylol-Autorate/master/img/konoha.png
-// @downloadURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
-// @updateURL	 https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js
+// @version      1.0.8-DreamNya
+// @icon         https://raw.githubusercontent.com/DreamNya/Keylol-Autorate/DreamNya-patch-1/img/konoha.png
+// @downloadURL	 https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js
+// @updateURL	 https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js
 // @description  Keylol forum autorate tool
-// @author       ohperhaps
+// @author       DreamNya
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @run-at       document-end
 // ==/UserScript==
 /*
 更新日志：
-1.version 1.0.1（2020-08-11）(感谢 @安安姬 @Opalus）
-   a.解决体力不满加体力的问题，加体力前将先获取剩余体力。
-   b.解决某些情况下收藏说明没有更新的问题
-
-2.version 1.0.2（2020-08-11）(感谢 @bokutaki @hmh28 @skiliey @安安姬)
-   a.解决无符合格式的收藏说明时，点击AutoRate页面卡死的问题
-
-3.version 1.0.3 (2020-08-12) （感谢 @Zayne. @zjiang322）
-   a.增加用户名显示
-   b.增加无体力可加时的提示信息
-
-4.version 1.0.4 (2020-08-13) (感谢 @虫虫大作战 )
-   a.修复代码逻辑错误造成的体力未加完的情况
-   b.修改提示信息，增加控制台debug信息
-
-5.version 1.0.5 (2020-08-13) (感谢 @丨OTZ丨_sqkUw )
-   a.修复当前可加体力多于需要加体力时的崩溃问题
-
-6.version 1.0.6 (2020-08-14) (感谢 @圣所 )
-   a.更新用户页面获取用户组gid的逻辑
-   b.增加非晋级用户组单次配额无法获取时默认值
-
-7.version 1.0.7 (2020-08-19) (感谢 @695丶 )
-   a.修复在有多页收藏时只获取第一页收藏的问题
-
+1.version 1.0.8-DreamNya（2020-08-26）
+a.在原作者ohperhaps 1.0.7版本基础上新增登陆论坛无需点击Autorate按钮自动加体力功能（首次使用需要手动点击按钮）。
+b.增加Autorate按钮显示体力冷却倒计时功能（hh:mm:ss格式）。默认开启，每隔1000毫秒刷新一次。
+  脚本编辑页面开头可自定义刷新时间const Autotime = 1000;（修改默认1000的为目标时间，单位毫秒，0为关闭显示）
+c.修改脚本只有在论坛主页才会生效，以加快论坛加载速度。
  */
+
+const Autotime = 1000; //自定义体力冷却倒计时刷新时间，单位毫秒，0为关闭显示。
+const HideAutorate = false; //显示体力冷却时是否隐藏Autorate文字 true:hh:mm:ss / false:Autorate hh:mm:ss
+
 (function() {
     'use strict';
     const $ = unsafeWindow.jQuery;
@@ -159,7 +146,7 @@
             $("#delform", res.response).find("td.xg1").each(function () {
                 let urlParams = new URLSearchParams($(this).find("a").attr("href"))
                 replys.push({tid: urlParams.get("ptid"),
-                              pid: urlParams.get("pid")})
+                             pid: urlParams.get("pid")})
             })
             return replys
         })
@@ -220,6 +207,7 @@
                         if (rate_result === 'successful') {
                             item.score -= attend
                             item.quote = new_quote
+                            GM_setValue('Ratetime', new Date().getTime()); //记录加体力时间
                             message.push(`user: ${item.username} tid: ${reply.tid}  pid: ${reply.pid} score: ${attend} reason:${new_quote}\n`)
                         } else if (rate_result === 'exceeded') {
                             updateQuote(item.favid, item.quote)
@@ -235,11 +223,12 @@
         }
         alert(message.join(''))
     }
+
     function views() {
         let rateDiv = $('<div/>', {id: 'rateDiv'})
         let rateBtn = $('<a/>', {
             id: 'autoRate',
-            text: 'AutoRate',
+            html: 'Autorate',
             class: 'btn btn-user-action',
             mouseover: function () { $(this).css({'background-color': '#57bae8', 'color': '#f7f7f7'}) },
             mouseleave: function () { $(this).css({'background-color': '', 'color': ''}) },
@@ -247,5 +236,35 @@
         rateDiv.append(rateBtn)
         $('#nav-search-bar').after(rateDiv)
     }
+    function check(val) { //优化显示体力冷却时间
+        if (val < 10) {
+            return ("0" + val);
+        }
+        else {
+            return (val);
+        }
+    }
+    function AutoTimer() { //自动加体力
+        let Cooldown=GM_getValue('Ratetime')+86400000-new Date().getTime() //获取体力冷却时间
+        //console.log(Cooldown)
+        if (Cooldown <1) { //判断体力冷却是否结束
+            main()
+        }
+        else if(Cooldown >1 && Autotime >0 ){ //体力冷却中
+            let Hour = Math.floor(Cooldown/1000/3600)
+            let Minute = Math.floor((Cooldown-Hour*1000*3600)/1000/60)
+            let Second = Math.floor((Cooldown-Hour*1000*3600-Minute*1000*60)/1000)
+            if (HideAutorate == false) {
+                $('#autoRate').html('Autorate<br/>'+check(Hour)+':'+check(Minute)+':'+check(Second)) //显示体力冷却时间
+            }
+            else{
+                $('#autoRate').html(check(Hour)+':'+check(Minute)+':'+check(Second)) //显示体力冷却时间
+            }
+        }
+    }
     views()
+    AutoTimer()
+    if(Autotime>0){
+        var Timer = setInterval(AutoTimer,Autotime) //设置显示体力冷却时间计时器
+        }
 })();

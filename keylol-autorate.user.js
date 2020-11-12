@@ -4,7 +4,7 @@
 // @include      https://keylol.com/forum.php
 // @include      https://keylol.com/
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
-// @version      1.1.2-DreamNya
+// @version      1.1.3-DreamNya
 // @icon         https://raw.githubusercontent.com/DreamNya/Keylol-Autorate/DreamNya-patch-1/img/konoha.png
 // @downloadURL	 https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js
 // @updateURL	 https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js
@@ -44,6 +44,10 @@ a.增加检测脚本重复运行机制，防止多页面重复运行脚本导致
 a.修复手动Autorate后的倒计时bug
 b.修复对比pid记录bug
 
+6.version 1.1.3-DreamNya (2020-11-12)
+a.修复对比pid记录bug
+b.优化获取时间函数
+
 已知问题：
 a.同时多个收藏贴只会平均体力，快加完其中一个时，不会优先加完。可能是1.0.9版本重写main()时存在逻辑问题。(暂无打算处理)
 
@@ -51,6 +55,7 @@ a.同时多个收藏贴只会平均体力，快加完其中一个时，不会优
 a.增加存储debug信息开关。目前需要手动删除debug注释(暂无计划更新)
 b.uid体力加完后一段时间自动清理(暂无计划更新)
 c.加入可视化操作面板(计划下个版本更新)
+d.每次增加体力前获取一次体力信息(暂无计划更新)
  */
 
 const Autotime = 1000; //自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示。
@@ -227,7 +232,6 @@ const refresh = 600000;//定时刷新页面，单位毫秒，0为不刷新。
     }
     async function main() {
         let message = []
-        let time = [new Date().getFullYear(),check(new Date().getMonth()+1),check(new Date().getDate())].join('-')+' '+[check(new Date().getHours()),check(new Date().getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMilliseconds())].join(':')
         let itemScores = await calcScores()
         let page =1
         let RateRecord=GM_getValue('RateRecord',[]) //读取tid pid记录
@@ -236,24 +240,24 @@ const refresh = 600000;//定时刷新页面，单位毫秒，0为不刷新。
         let status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
         if (status == "Off"){
             GM_setValue('Status',"On") //防止重复运行标记
-            //GM_setValue(time+' itemScores',itemScores)
+            //GM_setValue(getDate()+' itemScores',itemScores)
             if (itemScores[0].length === 0) {
                 message.push('未找到正确格式的收藏帖子！\n')
-                GM_setValue(time+' result','未找到正确格式的收藏帖子！')
+                GM_setValue(getDate()+' result','未找到正确格式的收藏帖子！')
             }
             while (itemScores[0].length >0){
                 if (itemScores[1] === 0) {
                     message.push('当前无剩余体力！请稍后再尝试！\n')
-                    GM_setValue(time+' result','当前无剩余体力！请稍后再尝试！')
+                    GM_setValue(getDate()+' result','当前无剩余体力！请稍后再尝试！')
                     break
                 }else{
                     mark=true
                     body:
                     while(page<51){
                         let replys = await getUserReplys(itemScores[0][0].uid, page)
-                        time = [new Date().getFullYear(),check(new Date().getMonth()+1),check(new Date().getDate())].join('-')+' '+[check(new Date().getHours()),check(new Date().getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMilliseconds())].join(':')
+                        hand:
                         while (replys.length > 0 ){
-                            //GM_setValue(time+' itemScores[0][0].uid, page, replys',[itemScores[0][0].uid, page, replys])
+                            //GM_setValue(getDate()+' itemScores[0][0].uid, page, replys',[itemScores[0][0].uid, page, replys])
                             if (itemScores[0][0].score > 0) { //剩余体力
                                 let attend = Math.min(itemScores[0][0].step, itemScores[0][0].score) //每次加体力数
                                 let new_quote = formatQuote(itemScores[0][0].quote, attend)[0] //体力说明计数
@@ -273,8 +277,9 @@ const refresh = 600000;//定时刷新页面，单位毫秒，0为不刷新。
                                     for (let Record of pid){ //对比pid记录 存在则直接跳过 减少POST
                                         if (replys[0].pid == Record){
                                             replys.shift()
+                                            //GM_setValue(getDate()+' replys,replys.length',[replys,replys.length])
                                             if (!replys.length>0){
-                                                break
+                                                break hand
                                             }
                                         }
                                     }
@@ -285,9 +290,7 @@ const refresh = 600000;//定时刷新页面，单位毫秒，0为不刷新。
                                     i=0
                                 }
                                 let rate_result = await rate(replys[0].tid, replys[0].pid, attend, new_quote)
-                                time = [new Date().getFullYear(),check(new Date().getMonth()+1),check(new Date().getDate())].join('-')+' '+[check(new Date().getHours()),check(new Date().
-getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMilliseconds())].join(':')
-                                /*GM_setValue(time+" rate_log",{replys_tid: replys[0].tid,
+                                /*GM_setValue(getDate()+" rate_log",{replys_tid: replys[0].tid,
                                                           replys_pid: replys[0].pid,
                                                           attend: attend,
                                                           new_quote: new_quote,
@@ -295,26 +298,26 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
                                 if (rate_result === 'successful') {
                                     itemScores[0][0].score -= attend
                                     itemScores[0][0].quote = new_quote
-                                    //GM_setValue(time+" successful itemScores[0][0].score",itemScores[0][0].score)
-                                    //GM_setValue(time+" successful itemScores[0][0].quote",itemScores[0][0].quote)
+                                    //GM_setValue(getDate()+" successful itemScores[0][0].score",itemScores[0][0].score)
+                                    //GM_setValue(getDate()+" successful itemScores[0][0].quote",itemScores[0][0].quote)
                                     GM_setValue('Ratetime', new Date().getTime()) //记录加体力时间
                                     Cooldown = 86400000+delay
-                                    GM_setValue(time+" rate",`user: ${itemScores[0][0].username} tid: ${replys[0].tid}  pid: ${replys[0].pid} score: ${attend} reason:${new_quote}`) //记录加体力结果
+                                    GM_setValue(getDate()+" rate",`user: ${itemScores[0][0].username} tid: ${replys[0].tid}  pid: ${replys[0].pid} score: ${attend} reason:${new_quote}`) //记录加体力结果
                                     message.push(`user: ${itemScores[0][0].username} tid: ${replys[0].tid}  pid: ${replys[0].pid} score: ${attend} reason:${new_quote}\n`)
                                     //updateQuote(itemScores[0][0].favid, itemScores[0][0].quote)
                                 } else if (rate_result === 'exceeded') {
-                                    //GM_setValue(time+" exceeded itemScores[0][0].score",itemScores[0][0].score)
-                                    //GM_setValue(time+" exceeded itemScores[0][0].quote",itemScores[0][0].quote)
+                                    //GM_setValue(getDate()+" exceeded itemScores[0][0].score",itemScores[0][0].score)
+                                    //GM_setValue(getDate()+" exceeded itemScores[0][0].quote",itemScores[0][0].quote)
                                     updateQuote(itemScores[0][0].favid, itemScores[0][0].quote)
-                                    GM_setValue(time+' result','当前体力已全部加完!')
+                                    GM_setValue(getDate()+' result','当前体力已全部加完!')
                                     message.push('当前体力已全部加完!\n')
                                     break body
                                 }
                                 RateRecord[i].tid.unshift(replys[0].tid) //记录本次tid
                                 RateRecord[i].pid.unshift(replys[0].pid) //记录本次pid
                             }else {
-                                //GM_setValue(time+" end itemScores[0][0].score",itemScores[0][0].score)
-                                //GM_setValue(time+" end itemScores[0][0].quote",itemScores[0][0].quote)
+                                //GM_setValue(getDate()+" end itemScores[0][0].score",itemScores[0][0].score)
+                                //GM_setValue(getDate()+" end itemScores[0][0].quote",itemScores[0][0].quote)
                                 updateQuote(itemScores[0][0].favid, itemScores[0][0].quote) //*可能存在page=50 score>0不更新的bug
                                 break body
                             }
@@ -332,13 +335,17 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
         }else{
             clearInterval(Timer)
             Timer = null
-            GM_setValue(time+' Error','检测到脚本重复运行')
+            GM_setValue(getDate()+' Error','检测到脚本重复运行')
             debug_Error++
             if(debug_Error>=2){GM_setValue('Status',"Off")}
-            alert("Error 检测到脚本重复运行\n"+debug_Error)
+            alert("Error 检测到脚本重复运行\n如脚本异常退出清再点击"+(3-debug_Error)+"次按钮强制运行脚本\n")
         }
     }
 
+    function getDate(){
+        return [new Date().getFullYear(),check(new Date().getMonth()+1),check(new Date().getDate())].join('-')+' '+[check(new Date().getHours()),check(new Date().
+getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMilliseconds())].join(':')
+    }
     function getRateRecord(RateRecord,uid){ //读取uid记录
         let i = 0
         for (let Record of RateRecord){
@@ -396,7 +403,7 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
             Cooldown=GM_getValue('Ratetime')+86400000+delay-time_debug //精确冷却时间
             let status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
             if (Cooldown <1){
-                GM_setValue(time_debug, Cooldown) //记录加体力时间
+                //GM_setValue(time_debug, Cooldown) //记录加体力时间
                 clearInterval(Timer)
                 Timer = null
                 main()

@@ -4,7 +4,7 @@
 // @include      https://keylol.com/forum.php
 // @include      https://keylol.com/
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
-// @version      1.1.3-DreamNya
+// @version      1.2.0-DreamNya
 // @icon         https://raw.githubusercontent.com/DreamNya/Keylol-Autorate/DreamNya-patch-1/img/konoha.png
 // @downloadURL	 https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js
 // @updateURL	 https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js
@@ -14,10 +14,10 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_listValues
 // @run-at       document-end
 // ==/UserScript==
-/*
-更新日志：
+const update_logs=`
 1.version 1.0.8-DreamNya（2020-08-26）
 a.在原作者ohperhaps 1.0.7版本基础上新增登陆论坛无需点击Autorate按钮自动加体力功能（首次使用需要手动点击按钮）。
 b.增加Autorate按钮显示体力冷却倒计时功能（hh:mm:ss格式）。默认开启，每隔1000毫秒刷新一次。
@@ -48,22 +48,31 @@ b.修复对比pid记录bug
 a.修复对比pid记录bug
 b.优化获取时间函数
 
+7.version 1.2.0-DreamNya(2020-11-22)
+a.重大更新，增加可视化脚本操作面板
+b.原自定义常量设置直接加入设置面板，无需打开油猴即可设置
+c.增加体力导出功能，现可查看历史加体力信息，并自动转到目标帖
+d.增加导出脚本调试信息功能，方便debug，提交异常信息
+f.增加脚本强制复位功能（与连续3次手动执行脚本共存）
+
 已知问题：
-a.同时多个收藏贴只会平均体力，快加完其中一个时，不会优先加完。可能是1.0.9版本重写main()时存在逻辑问题。(暂无打算处理)
+a.同时多个收藏贴只会平均体力，快加完其中一个时，不会优先加完。可能是1.0.9版本重写main()时存在逻辑问题。(无打算处理，不推荐同时加多个体力)
 
 计划中：
 a.增加存储debug信息开关。目前需要手动删除debug注释(暂无计划更新)
 b.uid体力加完后一段时间自动清理(暂无计划更新)
-c.加入可视化操作面板(计划下个版本更新)
-d.每次增加体力前获取一次体力信息(暂无计划更新)
- */
+d.每次增加体力前获取一次体力信息(暂无计划更新)`
 
-const Autotime = 1000; //自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示。
-const HideAutorate = false; //显示体力冷却时是否隐藏Autorate文字 true:hh:mm:ss / false:Autorate hh:mm:ss
-const delay = 5000; //自定义24小时体力冷却完毕后加体力延迟，单位毫秒
-const PreciseCooldown = false; //精确体力冷却倒计时 false:只在初始化时获取一次冷却时间 true:每个刷新周期获取一次冷却时间
-const refresh = 600000;//定时刷新页面，单位毫秒，0为不刷新。
+const version="1.2.0-DreamNya";
+
+var Autotime = GM_getValue('Autotime',1000); //自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示。
+var HideAutoRate = GM_getValue('HideAutoRate',false); //显示体力冷却时是否隐藏Autorate文字 true:hh:mm:ss / false:Autorate hh:mm:ss
+var delay = GM_getValue('delay',5000); //自定义24小时体力冷却完毕后再次加体力时延迟
+var PreciseCooldown = GM_getValue('PreciseCooldown',true); //精确体力冷却倒计时 false:只在初始化时获取一次冷却时间 true:每个刷新周期获取一次冷却时间
+var refresh = GM_getValue('refresh',600000);//定时刷新页面，单位毫秒，0为不刷新。
 //const debug = 3; //0:不存储除体力冷却体力操作以外的任何信息 1:存储有限debug信息 2:存储大量debug信息 3:1+2
+//提示：原自定义常量设置现已加入设置面板，如需手动修改可至脚本存储处`
+
 
 (function() {
     'use strict';
@@ -302,8 +311,8 @@ const refresh = 600000;//定时刷新页面，单位毫秒，0为不刷新。
                                     //GM_setValue(getDate()+" successful itemScores[0][0].quote",itemScores[0][0].quote)
                                     GM_setValue('Ratetime', new Date().getTime()) //记录加体力时间
                                     Cooldown = 86400000+delay
-                                    GM_setValue(getDate()+" rate",`user: ${itemScores[0][0].username} tid: ${replys[0].tid}  pid: ${replys[0].pid} score: ${attend} reason:${new_quote}`) //记录加体力结果
-                                    message.push(`user: ${itemScores[0][0].username} tid: ${replys[0].tid}  pid: ${replys[0].pid} score: ${attend} reason:${new_quote}\n`)
+                                    GM_setValue(getDate()+" rate",`user: ${itemScores[0][0].username} tid: ${replys[0].tid} pid: ${replys[0].pid} score: ${attend} reason:${new_quote}`) //记录加体力结果
+                                    message.push(`user: ${itemScores[0][0].username} tid: ${replys[0].tid} pid: ${replys[0].pid} score: ${attend} reason:${new_quote}\n`)
                                     //updateQuote(itemScores[0][0].favid, itemScores[0][0].quote)
                                 } else if (rate_result === 'exceeded') {
                                     //GM_setValue(getDate()+" exceeded itemScores[0][0].score",itemScores[0][0].score)
@@ -312,6 +321,15 @@ const refresh = 600000;//定时刷新页面，单位毫秒，0为不刷新。
                                     GM_setValue(getDate()+' result','当前体力已全部加完!')
                                     message.push('当前体力已全部加完!\n')
                                     break body
+                                } else if(rate_result === 'Unknown'){
+                                    let log={replys_tid: replys[0].tid,
+                                             replys_pid: replys[0].pid,
+                                             attend: attend,
+                                             new_quote: new_quote,
+                                             rate_result: rate_result}
+                                    GM_setValue(getDate()+" rate_log",log)
+                                    message.push(`存在异常帖:replys_tid: ${replys[0].tid},replys_pid: ${replys[0].pid},attend: ${attend},new_quote: ${new_quote},rate_result: ${rate_result}\n`)
+                                    console.log(log)
                                 }
                                 RateRecord[i].tid.unshift(replys[0].tid) //记录本次tid
                                 RateRecord[i].pid.unshift(replys[0].pid) //记录本次pid
@@ -331,7 +349,7 @@ const refresh = 600000;//定时刷新页面，单位毫秒，0为不刷新。
             if(mark){GM_setValue('RateRecord',RateRecord)}
             GM_setValue('Status',"Off")
             alert(message.join(''))
-            if(Timer == null){Timer = setInterval(AutoTimer,Autotime)} //重启倒计时冷却
+            if(Timer == null && Autotime>0){Timer = setInterval(AutoTimer,Autotime)} //重启倒计时冷却
         }else{
             clearInterval(Timer)
             Timer = null
@@ -365,7 +383,7 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
             class: 'btn btn-user-action',
             mouseover: function () { $(this).css({'background-color': '#57bae8', 'color': '#f7f7f7'}) },
             mouseleave: function () { $(this).css({'background-color': '', 'color': ''}) },
-            click: function () { main() }})
+            click: function () { panel() }})
         rateDiv.append(rateBtn)
         $('#nav-search-bar').after(rateDiv)
     }
@@ -389,10 +407,12 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
         }
     }
     function AutoTimer() { //自动加体力
+        let now_time
         if (PreciseCooldown){
-            Cooldown=GM_getValue('Ratetime')+86400000+delay-new Date().getTime()
+            now_time = new Date().getTime()
+            Cooldown = GM_getValue('Ratetime')+86400000+delay-now_time
         }else{
-            Cooldown -=Autotime
+            Cooldown -= Autotime
         }
         let Hour = Math.floor(Cooldown/1000/3600)
         let Minute = Math.floor((Cooldown-Hour*1000*3600)/1000/60)
@@ -412,7 +432,7 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
             }
         }
         else if(Cooldown > 1 && Autotime > 0 ){ //体力冷却中
-            if (HideAutorate == false) { //显示体力冷却时间
+            if (HideAutoRate == false) { //显示体力冷却时间
                 $('#autoRate').html('Autorate<br/>'+time)
             }
             else{
@@ -422,13 +442,18 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
                 Timer = setInterval(AutoTimer,Autotime) //设置显示体力冷却时间计时器
             }
         }
-        auto_refresh+=Autotime
+        if (PreciseCooldown){
+            auto_refresh=now_time-init_time
+        }else{
+            auto_refresh+=Autotime
+        }
         if (auto_refresh > refresh && refresh > 0){location.reload()}
     }
     views()
     let init = GM_getValue('Ratetime')
+    let init_time=new Date().getTime()
     if (init){
-        var Cooldown=init+86400000+delay-new Date().getTime() //获取体力冷却时间
+        var Cooldown=init+86400000+delay-init_time //获取体力冷却时间
         var Timer = null
         AutoTimer()
         //debugpid()
@@ -448,4 +473,301 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
         }
         GM_setValue('RateRecord',RateRecord)
     }
+
+    function panel(){
+        if($("#setting").length>0){
+            $("#setting").toggle()
+        }else{
+            $("body").append(`
+<div id="setting" style="position: fixed; z-index: 201; left: 360px; top: 120px;">
+<style type="text/css">object{visibility:hidden;}</style><table cellpadding="0" cellspacing="0"><tbody><tr><td class="t_l"></td><td class="t_c" style="cursor:move" onmousedown="dragMenu($('setting'), event, 1)"></td>
+<td class="t_r"></td></tr>
+<tr><td class="m_l" style="cursor:move" onmousedown="dragMenu($('setting'), event, 1)"></td>
+<td class="m_c" style="width:700px;">
+<span style="position: absolute;top:20px;right: 20px"><a href="javascript:;" class="flbc" id="setting_hide" >关闭</a></span>
+<form>
+<div style="line-height:20px; font-size:13px;padding:5px; clear:both; margin-top:5px;margin-left:5px;width:500px">
+<b>自动加体力脚本Keylol-Autorate</b>
+<div id="version">Version:</div>
+增强版作者：<a href="https://keylol.com/suid-138415">DreamNya(steven026)</a> 原作者：<a href="https://keylol.com/suid-816143">ohperhaps</a><br>
+Github：<a href="https://github.com/DreamNya/Keylol-Autorate">https://github.com/DreamNya/Keylol-Autorate</a><br>
+Keylol：<a href="https://keylol.com/t660000-1-1">https://keylol.com/t660000-1-1</a><br>
+</div>
+<div class="o pns" style="height:15px;text-align:left;white-space: nowrap">
+<button type="button" id="main" class="pn pnc z"style="text-align:center;width:90px;">手动执行脚本</button>
+<div style="margin-top:4px">手动执行一次加体力操作</div>
+</div>
+
+<div class="o pns" style="height:15px;text-align:left;white-space: nowrap">
+<button type="button" id="update_log" class="pn pnc z"style="width:90px;">显示更新日志</button>
+<div style="margin-top:4px">显示脚本更新日志</div>
+</div>
+
+<div class="o pns" style="height:15px;text-align:left;white-space: nowrap">
+<button type="button" id="autotime" class="pn pnc z" style="width:90px;">设置倒计时</button>
+<div style="margin-top:4px">自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示，默认1000。</div>
+</div>
+
+<div class="o pns" style="height:15px;text-align:left;white-space: nowrap">
+<button type="button" id="hideautorate" class="pn pnc z" style="width:90px;">初始化失败</button>
+<div style="margin-top:4px">体力冷却倒计时时显示或隐藏Autorate文字 显示:hh:mm:ss / 隐藏:Autorate hh:mm:ss</div>
+</div>
+
+<div class="o pns" style="height:15px;text-align:left;white-space: nowrap">
+<button type="button" id="delay" class="pn pnc z" style="width:90px;">倒计时延迟</button>
+<div style="margin-top:4px">自定义24小时体力冷却完毕后再次加体力时延迟，单位毫秒，最小为0，默认5000。</div>
+</div>
+
+<div class="o pns" style="height:15px;text-align:left;white-space: nowrap">
+<button type="button" id="precise" class="pn pnc z" style="width:90px;"><span>精确倒计时</span></button>
+<div style="margin-top:4px">精确体力冷却倒计时 0:只在初始化时获取一次冷却时间 1:每个刷新周期获取一次冷却时间，默认1。</div>
+</div>
+
+<div class="o pns" style="height:15px;text-align:left;white-space: nowrap">
+<button type="button" id="logs" class="pn pnc z" style="width:90px;"><span>导出体力记录</span></button>
+<div style="margin-top:4px">以文本形式导出所有存储在本地的加体力记录。</div>
+</div>
+
+<div class="o pns" style="height:15px;text-align:left;white-space: nowrap">
+<button type="button" id="logs_link" class="pn pnc z" style="width:90px;"><span>导出体力链接</span></button>
+<div style="margin-top:4px">以链接形式导出所有存储在本地的加体力记录。</div>
+</div>
+
+<div class="o pns" style="height:15px;text-align:left;white-space: nowrap">
+<button type="button" id="logs_all" class="pn pnc z" style="width:90px;"><span>导出调试信息</span></button>
+<div style="margin-top:4px">导出所有存储在本地的脚本运行调试信息，包含加体力记录文本。</div>
+</div>
+
+<div class="o pns" style=";text-align:left;white-space: nowrap">
+<button type="button" id="reset" class="pn pnc z" style="width:90px;"><span>脚本强制复位</span></button>
+<div style="margin-top:4px">当脚本异常退出无法执行时可点击此按钮强制复位，后再手动执行脚本</div>
+</div>
+
+</form>
+</td>
+
+<td class="m_r" style="cursor:move" onmousedown="dragMenu($('setting'), event, 1)"></td></tr>
+<tr><td class="b_l"></td><td class="b_c" style="cursor:move" onmousedown="dragMenu($('setting'), event, 1)"></td><td class="b_r"></td>
+</tr>
+</tbody>
+</table>
+</div>
+`)
+            $('#version').html("Version:"+version)
+
+            $('#setting_hide').on("click",function(){$('#setting').hide()}) //设置面板关闭按钮点击事件
+
+            $('#main').on("click",function(){main()}) //手动执行脚本点击事件
+
+            $('#autotime').on("click",function(){ //设置倒计时点击事件
+                let autotime=prompt("自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示，默认1000。",Autotime)
+                if (autotime!=null && autotime!=""){
+                    if(Number(autotime)>=0){
+                        autotime=Number(autotime)
+                        Autotime=autotime
+                        GM_setValue("Autotime", autotime)
+                        clearInterval(Timer)
+                        Timer = setInterval(AutoTimer,Autotime)
+                    }else{
+                        (alert("Error\n设置倒计时输入错误，请输入非负数"))
+                    }
+                }
+            })
+
+            function HideAutorate_(){ //倒计时名称初始化
+                if(HideAutoRate){
+                    $('#hideautorate').html("倒计时显示名称")
+                }else{
+                    $('#hideautorate').html("倒计时隐藏名称")
+                }
+            }
+            HideAutorate_()
+            $('#hideautorate').on("click",function(){ //倒计时名称点击事件
+                HideAutoRate = !HideAutoRate
+                GM_setValue("HideAutoRate", HideAutoRate)
+                HideAutorate_()
+            })
+
+            $('#precise').on("click",function(){ //精确倒计时点击事件
+                let i
+                if(PreciseCooldown){i=1}else{i=0}
+                let precise=prompt("精确体力冷却倒计时 0:只在初始化时获取一次冷却时间 1:每个刷新周期获取一次冷却时间，默认1。",i)
+                if (precise!=null && precise!=""){
+                    switch(precise){
+                        case "1":
+                            PreciseCooldown = true
+                            GM_setValue("PreciseCooldown", PreciseCooldown)
+                            break
+                        case "0":
+                            PreciseCooldown = false
+                            GM_setValue("PreciseCooldown", PreciseCooldown)
+                            break
+                        default:
+                            alert("Error\n精确倒计时输入错误，请输入0或1")
+                    }
+                }
+            })
+
+            $("#delay").on("click",function(){ //倒计时延迟点击事件
+                let delay_=prompt("自定义24小时体力冷却完毕后再次加体力时延迟，单位毫秒,最小为0，默认5000。",delay)
+                if (delay_!=null && delay_!=""){
+                    if(Number(delay_)>=0){
+                        delay_=Number(delay_)
+                        delay=delay_
+                        GM_setValue("delay", delay)
+                    }else{
+                        (alert("Error\n倒计时延迟输入错误，请输入非负数"))
+                    }
+                }
+            })
+
+            $("#reset").on("click",function(){ //脚本强制复位点击事件
+                GM_setValue("Status","Off")
+                alert("脚本已强制复位，已可手动执行脚本，如再次异常退出请联系作者提交异常情况。")
+            })
+
+            $("#logs").on("click",function logs(){
+                if($("#log_history").length>0){
+                    $("#log_history").toggle()
+                }else{
+                    $("body").append(`<div id="log_history" style="position: fixed; z-index: 201; left: 450px; top: 40px;">
+<style type="text/css">object{visibility:hidden;}</style><table cellpadding="0" cellspacing="0"><tbody><tr><td class="t_l"></td><td class="t_c" style="cursor:move" onmousedown="dragMenu($('log_history'), event, 1)"></td>
+<td class="t_r"></td></tr>
+<tr><td class="m_l" style="cursor:move" onmousedown="dragMenu($('log_history'), event, 1)"></td>
+<td class="m_c">
+<h3 class="flb" id="fctrl_reply" style="cursor: move;" onmousedown="dragMenu($('log_history'), event, 1)">
+<em>体力记录文本</em>
+<span style="position: absolute;top:20px;right: 20px"><a href="javascript:;" class="flbc" id="log_history_hide" >关闭</a></span>
+</h3>
+<form>
+<div class="pbt cl">
+<pre style="line-height:15px; font-size:11px;padding:5px; clear:both; margin-top:5px;margin-left:5px;height:500px;overflow:auto" id="log_history_text"></pre>
+</div>
+</form>
+</td>
+
+<td class="m_r" style="cursor:move" onmousedown="dragMenu($('log_history'), event, 1)"></td></tr>
+<tr><td class="b_l"></td><td class="b_c" style="cursor:move" onmousedown="dragMenu($('log_history'), event, 1)"></td><td class="b_r"></td>
+</tr>
+</tbody>
+</table>
+</div>`)
+                    let logs_=GM_listValues()
+                    let results=[]
+                    for (let log of logs_){
+                        if(log.slice(-4)=="rate"){results.push(log+" : "+GM_getValue(log)+"\n")}
+                    }
+                    $("#log_history_text").html(results) //显示体力记录文本
+
+                    $('#log_history_hide').on("click",function(){$('#log_history').hide()})} //体力记录关闭按钮点击事件
+            })
+
+            $("#logs_link").on("click",function logs(){
+                if($("#log_history_link").length>0){
+                    $("#log_history_link").toggle()
+                }else{
+                    $("body").append(`<div id="log_history_link" style="position: fixed; z-index: 201; left: 450px; top: 40px;">
+<style type="text/css">object{visibility:hidden;}</style><table cellpadding="0" cellspacing="0"><tbody><tr><td class="t_l"></td><td class="t_c" style="cursor:move" onmousedown="dragMenu($('log_history_link'), event, 1)"></td>
+<td class="t_r"></td></tr>
+<tr><td class="m_l" style="cursor:move" onmousedown="dragMenu($('log_history_link'), event, 1)"></td>
+<td class="m_c">
+<h3 class="flb" id="fctrl_reply" style="cursor: move;" onmousedown="dragMenu($('log_history_link'), event, 1)">
+<em>体力记录链接</em>
+<span style="position: absolute;top:20px;right: 20px"><a href="javascript:;" class="flbc" id="log_history_link_hide" >关闭</a></span>
+</h3>
+<form>
+<div class="pbt cl">
+<pre style="line-height:15px; font-size:11px;padding:5px; clear:both; margin-top:5px;margin-left:5px;height:500px;overflow:auto" id="log_history_link_text"></pre>
+</div>
+</form>
+</td>
+
+<td class="m_r" style="cursor:move" onmousedown="dragMenu($('log_history_link'), event, 1)"></td></tr>
+<tr><td class="b_l"></td><td class="b_c" style="cursor:move" onmousedown="dragMenu($('log_history_link'), event, 1)"></td><td class="b_r"></td>
+</tr>
+</tbody>
+</table>
+</div>`)
+                    let logs_=GM_listValues()
+                    let results=[]
+                    for (let log of logs_){
+                        if(log.slice(-4)=="rate"){
+                            let log_value=GM_getValue(log)
+                            let tid=log_value.slice(log_value.search("tid:")+5,log_value.search("pid:")-1)
+                            let pid=log_value.slice(log_value.search("pid:")+5,log_value.search("score:")-1)
+                            results.push(`<a href=https://keylol.com/forum.php?mod=redirect&goto=findpost&ptid=${tid}&pid=${pid}>${log} : ${log_value}</a>\n`)}
+                    }
+                    console.log(results)
+                    $("#log_history_link_text").html(results) //显示体力链接文本
+
+                    $('#log_history_link_hide').on("click",function(){$('#log_history_link').hide()})} //体力链接关闭按钮点击事件
+            })
+
+            $("#logs_all").on("click",function logs(){
+                if($("#log_all").length>0){
+                    $("#log_all").toggle()
+                }else{
+                    $("body").append(`<div id="log_all" style="position: fixed; z-index: 201; left: 450px; top: 40px;">
+<style type="text/css">object{visibility:hidden;}</style><table cellpadding="0" cellspacing="0"><tbody><tr><td class="t_l"></td><td class="t_c" style="cursor:move" onmousedown="dragMenu($('log_all'), event, 1)"></td>
+<td class="t_r"></td></tr>
+<tr><td class="m_l" style="cursor:move" onmousedown="dragMenu($('log_all'), event, 1)"></td>
+<td class="m_c">
+<h3 class="flb" id="fctrl_reply" style="cursor: move;" onmousedown="dragMenu($('log_all'), event, 1)">
+<em>脚本调试信息</em>
+<span style="position: absolute;top:20px;right: 20px"><a href="javascript:;" class="flbc" id="log_all_hide" >关闭</a></span>
+</h3>
+<form>
+<div class="pbt cl">
+<pre style="line-height:15px; font-size:11px;padding:5px; clear:both; margin-top:5px;margin-left:5px;height:500px;overflow:auto" id="log_all_text"></pre>
+</div>
+</form>
+</td>
+
+<td class="m_r" style="cursor:move" onmousedown="dragMenu($('log_all'), event, 1)"></td></tr>
+<tr><td class="b_l"></td><td class="b_c" style="cursor:move" onmousedown="dragMenu($('log_all'), event, 1)"></td><td class="b_r"></td>
+</tr>
+</tbody>
+</table>
+</div>`)
+                    let logs_=GM_listValues()
+                    let results=[]
+                    for (let log of logs_){
+                        results.push(log+" : "+GM_getValue(log)+"\n")
+                    }
+                    $("#log_all_text").html(results) //显示导出调试信息文本
+
+                    $('#log_all_hide').on("click",function(){$('#log_all').hide()})} //导出调试信息关闭按钮点击事件
+            })
+
+            $("#update_log").on("click",function(){ //显示更新日志点击事件
+                if($("#update_logs").length>0){
+                    $("#update_logs").toggle()
+                }else{
+                    $("body").append(`<div id="update_logs" style="position: fixed; z-index: 201; left: 320px; top: 40px;">
+<style type="text/css">object{visibility:hidden;}</style><table cellpadding="0" cellspacing="0"><tbody><tr><td class="t_l"></td><td class="t_c" style="cursor:move" onmousedown="dragMenu($('update_logs'), event, 1)"></td>
+<td class="t_r"></td></tr>
+<tr><td class="m_l" style="cursor:move" onmousedown="dragMenu($('update_logs'), event, 1)"></td>
+<td class="m_c">
+<h3 class="flb" id="fctrl_reply" style="cursor: move;" onmousedown="dragMenu($('update_logs'), event, 1)">
+<em>更新日志</em>
+<span style="position: absolute;top:20px;right: 20px"><a href="javascript:;" class="flbc" id="update_logs_hide" >关闭</a></span>
+</h3>
+<form>
+<div class="pbt cl">
+<pre style="line-height:15px; font-size:11px;padding:5px; clear:both; margin-top:5px;margin-left:5px;height:500px;overflow:auto" id="update_text"></pre>
+</div>
+</form>
+</td>
+
+<td class="m_r" style="cursor:move" onmousedown="dragMenu($('update_logs'), event, 1)"></td></tr>
+<tr><td class="b_l"></td><td class="b_c" style="cursor:move" onmousedown="dragMenu($('update_logs'), event, 1)"></td><td class="b_r"></td>
+</tr>
+</tbody>
+</table>
+</div>`)
+                    $("#update_text").html(update_logs) //显示更新日志文本
+
+                    $('#update_logs_hide').on("click",function(){$('#update_logs').hide()})} //更新日志关闭按钮点击事件
+            })
+        }}
 })();

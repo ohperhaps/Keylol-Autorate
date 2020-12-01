@@ -4,7 +4,7 @@
 // @include      https://keylol.com/forum.php
 // @include      https://keylol.com/
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
-// @version      1.2.1-DreamNya
+// @version      1.2.2-DreamNya
 // @icon         https://raw.githubusercontent.com/DreamNya/Keylol-Autorate/DreamNya-patch-1/img/konoha.png
 // @downloadURL	 https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js
 // @updateURL	 https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js
@@ -15,15 +15,26 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_listValues
+// @grant        GM_deleteValue
 // @grant        GM_addStyle
 // @run-at       document-end
 // ==/UserScript==
 const update_logs=
-`8.version 1.2.1-DreamNya(2020-11-23)
+`9.version 1.2.2-DreamNya(2020-12-01)
+a.体力冷却异常增加防御措施，现在不会无限提示无体力了
+b.main()函数增加try catch防御措施，以防万一,但运行速度变慢，自行选择
+c.现在每加完一个回复的体力就更新一次收藏说明，而不是以前的加完全部回复才更新，防止异常漏更新
+d.现在体力记录、调试信息可以动态更新了
+e.进一步模块化设置面板div文本代码
+f.增加可能有点鸡肋的记录面板位置功能
+（本来想用函数算最佳位置，后来想了想还是自定义吧）
+
+8.version 1.2.1-DreamNya(2020-11-23)
 a.优化Autorate显示方法，如超过10秒未成功初始化，会弹出提示建议刷新页面
 b.优化代码写法
 c.优化导出调试信息，现在可以导出完整调试信息
-e.优化css代码，添加@grant GM_addStyle，增加可读性，看上去没有以前那么杂乱了。
+d.优化导出体力记录/链接
+e.优化css代码，添加@grant GM_addStyle，增加可读性，看上去没有以前那么杂乱了
 
 7.version 1.2.0-DreamNya(2020-11-22)
 a.重大更新，增加可视化脚本操作面板
@@ -68,15 +79,17 @@ a.同时多个收藏贴只会平均体力，快加完其中一个时，不会优
 计划中：
 a.增加存储debug信息开关。目前需要手动删除debug注释(暂无计划更新)
 b.uid体力加完后一段时间自动清理(暂无计划更新)
-d.每次增加体力前获取一次体力信息(下个版本更新)
+d.每次增加体力前获取一次体力信息(因功能取舍/逻辑问题更新推迟)
 `
-const version="1.2.1-DreamNya";
+const version="1.2.2-DreamNya";
 
 let Autotime = GM_getValue('Autotime',1000); //自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示。
 let HideAutoRate = GM_getValue('HideAutoRate',false); //显示体力冷却时是否隐藏Autorate文字 true:hh:mm:ss / false:Autorate hh:mm:ss
 let delay = GM_getValue('delay',5000); //自定义24小时体力冷却完毕后再次加体力时延迟
 let PreciseCooldown = GM_getValue('PreciseCooldown',true); //精确体力冷却倒计时 false:只在初始化时获取一次冷却时间 true:每个刷新周期获取一次冷却时间
-let refresh = GM_getValue('refresh',600000);//定时刷新页面，单位毫秒，0为不刷新。
+let refresh = GM_getValue('refresh',600000);//定时刷新页面，单位毫秒，0为不刷新
+let position = GM_getValue('position', false);//设置刷新页面后面板位置 0:固定面板位置 1:点击关闭按钮时记录面板位置 -1：恢复默认位置(不影响是否固定)
+let debug_main = GM_getValue('debug_main',false);//是否开始debug加体力模式 false:正常运行速度，如遇bug需自行查看控制台 true:运行速度变慢，但较稳定，适合新手
 //const debug = 3; //0:不存储除体力冷却体力操作以外的任何信息 1:存储有限debug信息 2:存储大量debug信息 3:1+2
 //提示：原自定义常量设置现已加入设置面板，如需手动修改可至脚本存储处`
 
@@ -233,13 +246,9 @@ let refresh = GM_getValue('refresh',600000);//定时刷新页面，单位毫秒�
     }
     function updateQuote(favid, quote) {
         const formData = new FormData()
-        let time = [new Date().getFullYear(),check(new Date().getMonth()+1),check(new Date().getDate())].join('-')+' '+[new Date().getHours(),check(new Date().getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMilliseconds())].join(':')
-        //GM_setValue(time+' updateQuote',[favid, quote])
         formData.append("favid", favid)
         formData.append("quote", quote)
         return xhrAsync(`plugin.php?id=keylol_favorite_notification:favorite_enhance&formhash=${formHash}`, "POST", formData).then((res) => {
-            //GM_setValue(time+' updateQuoteres',res)
-            //GM_setValue(time+' updateQuoteres.responseText',res.responseText)
             return res.responseText
         })
     }
@@ -264,7 +273,16 @@ let refresh = GM_getValue('refresh',600000);//定时刷新页面，单位毫秒�
             }
         })
     }
-    async function main() {
+
+    function main(){
+        if(debug_main){
+            main_debug()
+        }else{
+            main_normal()
+        }
+    }
+
+    async function main_debug() {
         let message = []
         let itemScores = await calcScores()
         let page =1
@@ -272,6 +290,135 @@ let refresh = GM_getValue('refresh',600000);//定时刷新页面，单位毫秒�
         let i=0 //根据uid获取RateRecord存储序号
         let mark=false //正常运行标记
         let status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
+        GM_setValue(getDate(),"debug main")
+        try{
+            if (status == "Off"){
+                GM_setValue('Status',"On") //防止重复运行标记
+                //GM_setValue(getDate()+' itemScores',itemScores)
+                if (itemScores[0].length === 0) {
+                    message.push('未找到正确格式的收藏帖子！\n')
+                    GM_setValue(getDate()+' result','未找到正确格式的收藏帖子！')
+                }
+                while (itemScores[0].length >0){
+                    if (itemScores[1] === 0) {
+                        if (Cooldown < 0){
+                            Cooldown=undefined
+                            GM_deleteValue('Ratetime')
+                            GM_setValue(getDate()+' Error','脚本冷却异常，当前无剩余体力！')
+                            message.push('Error\n脚本冷却异常，当前无剩余体力！\n冷却时间已清除，待体力冷却完毕后，请手动运行脚本初始冷却时间。')
+                        } else {
+                            GM_setValue(getDate()+' result','当前无剩余体力！请稍后再尝试！')
+                            message.push('当前无剩余体力！请稍后再尝试！\n')
+                        }
+                        break
+                    }else{
+                        mark=true
+                        body:
+                        while(page<51){
+                            let replys = await getUserReplys(itemScores[0][0].uid, page)
+                            hand:
+                            while (replys.length > 0 ){
+                                //GM_setValue(getDate()+' itemScores[0][0].uid, page, replys',[itemScores[0][0].uid, page, replys])
+                                if (itemScores[0][0].score > 0) { //剩余体力
+                                    let attend = Math.min(itemScores[0][0].step, itemScores[0][0].score) //每次加体力数
+                                    let new_quote = formatQuote(itemScores[0][0].quote, attend)[0] //体力说明计数
+                                    let tid=[]
+                                    let pid=[]
+                                    if (RateRecord.length>0){
+                                        i=getRateRecord(RateRecord,itemScores[0][0].uid) //读取uid记录
+                                        if (i > -1){
+                                            tid=RateRecord[i].tid //读取tid记录
+                                            pid=RateRecord[i].pid //读取pid记录
+                                        } else{
+                                            RateRecord.push({uid:itemScores[0][0].uid,
+                                                             tid:tid,
+                                                             pid:pid})
+                                            i=RateRecord.length-1
+                                        }
+                                        for (let Record of pid){ //对比pid记录 存在则直接跳过 减少POST
+                                            if (replys[0].pid == Record){
+                                                replys.shift()
+                                                //GM_setValue(getDate()+' replys,replys.length',[replys,replys.length])
+                                                if (!replys.length>0){
+                                                    break hand
+                                                }
+                                            }
+                                        }
+                                    }else{
+                                        RateRecord=[{uid:itemScores[0][0].uid,
+                                                     tid:tid,
+                                                     pid:pid}]
+                                        i=0
+                                    }
+                                    let rate_result = await rate(replys[0].tid, replys[0].pid, attend, new_quote)
+                                    /*GM_setValue(getDate()+" rate_log",{replys_tid: replys[0].tid,
+                                                          replys_pid: replys[0].pid,
+                                                          attend: attend,
+                                                          new_quote: new_quote,
+                                                          rate_result: rate_result})*/
+                                    if (rate_result === 'successful') {
+                                        itemScores[0][0].score -= attend
+                                        itemScores[0][0].quote = new_quote
+                                        //GM_setValue(getDate()+" successful itemScores[0][0].score",itemScores[0][0].score)
+                                        //GM_setValue(getDate()+" successful itemScores[0][0].quote",itemScores[0][0].quote)
+                                        GM_setValue('Ratetime', new Date().getTime()) //记录加体力时间
+                                        Cooldown = 86400000+delay
+                                        GM_setValue(getDate()+" rate",`user: ${itemScores[0][0].username} tid: ${replys[0].tid} pid: ${replys[0].pid} score: ${attend} reason:${new_quote}`) //记录加体力结果
+                                        message.push(`user: ${itemScores[0][0].username} tid: ${replys[0].tid} pid: ${replys[0].pid} score: ${attend} reason:${new_quote}\n`)
+                                        updateQuote(itemScores[0][0].favid, itemScores[0][0].quote)
+                                    } else if (rate_result === 'exceeded') {
+                                        updateQuote(itemScores[0][0].favid, itemScores[0][0].quote)
+                                        GM_setValue(getDate()+' result','当前体力已全部加完!')
+                                        message.push('当前体力已全部加完!\n')
+                                        break body
+                                    } else if(rate_result === 'Unknown'){
+                                        let log=`replys_tid: ${replys[0].tid},replys_pid: ${replys[0].pid},attend: ${attend},new_quote: ${new_quote},rate_result: ${rate_result}`
+                                    GM_setValue(getDate()+" rate_log",log)
+                                        message.push(`存在异常帖:${log}\n`)
+                                        console.log(log)
+                                    }
+                                    RateRecord[i].tid.unshift(replys[0].tid) //记录本次tid
+                                    RateRecord[i].pid.unshift(replys[0].pid) //记录本次pid
+                                }else {
+                                    //updateQuote(itemScores[0][0].favid, itemScores[0][0].quote) //*可能存在page=50 score>0不更新的bug
+                                    break body
+                                }
+                                replys.shift() //加下一个体力
+                            }
+                            ++page
+                        }
+                    }
+                    itemScores[0].shift() //加下一个收藏贴体力 *未测试存在多个收藏贴的情况 可能存在bug；如有bug可以手动多次运行
+                }
+                if(mark){GM_setValue('RateRecord',RateRecord)}
+                GM_setValue('Status',"Off")
+                alert(message.join(''))
+                if(Cooldown>0 && Timer == null && Autotime>0){Timer = setInterval(AutoTimer,Autotime)} //重启倒计时冷却
+            }else{
+                clearInterval(Timer)
+                Timer = null
+                GM_setValue(getDate()+' Error','检测到脚本重复运行')
+                debug_Error++
+                if(debug_Error>=2){GM_setValue('Status',"Off")}
+                alert("Error 检测到脚本重复运行\n如脚本异常退出清再点击"+(3-debug_Error)+"次按钮强制运行脚本\n")
+            }
+        }
+        catch(error){
+            GM_deleteValue('Ratetime')
+            GM_setValue(getDate()+' ERROR',error.name+" : "+error.message)
+            alert("ERROR\n遇到重大错误，请勿再次执行脚本,\n请将以下内容反馈给作者\n"+error)
+        }
+    }
+
+    async function main_normal() {
+        let message = []
+        let itemScores = await calcScores()
+        let page =1
+        let RateRecord=GM_getValue('RateRecord',[]) //读取tid pid记录
+        let i=0 //根据uid获取RateRecord存储序号
+        let mark=false //正常运行标记
+        let status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
+        GM_setValue(getDate(),"normal main")
         if (status == "Off"){
             GM_setValue('Status',"On") //防止重复运行标记
             //GM_setValue(getDate()+' itemScores',itemScores)
@@ -281,8 +428,15 @@ let refresh = GM_getValue('refresh',600000);//定时刷新页面，单位毫秒�
             }
             while (itemScores[0].length >0){
                 if (itemScores[1] === 0) {
-                    message.push('当前无剩余体力！请稍后再尝试！\n')
-                    GM_setValue(getDate()+' result','当前无剩余体力！请稍后再尝试！')
+                    if (Cooldown < 0){
+                        Cooldown=undefined
+                        GM_deleteValue('Ratetime')
+                        GM_setValue(getDate()+' Error','脚本冷却异常，当前无剩余体力！')
+                        message.push('Error\n脚本冷却异常，当前无剩余体力！\n冷却时间已清除，待体力冷却完毕后，请手动运行脚本初始冷却时间。')
+                    } else {
+                        GM_setValue(getDate()+' result','当前无剩余体力！请稍后再尝试！')
+                        message.push('当前无剩余体力！请稍后再尝试！\n')
+                    }
                     break
                 }else{
                     mark=true
@@ -340,8 +494,6 @@ let refresh = GM_getValue('refresh',600000);//定时刷新页面，单位毫秒�
                                     message.push(`user: ${itemScores[0][0].username} tid: ${replys[0].tid} pid: ${replys[0].pid} score: ${attend} reason:${new_quote}\n`)
                                     //updateQuote(itemScores[0][0].favid, itemScores[0][0].quote)
                                 } else if (rate_result === 'exceeded') {
-                                    //GM_setValue(getDate()+" exceeded itemScores[0][0].score",itemScores[0][0].score)
-                                    //GM_setValue(getDate()+" exceeded itemScores[0][0].quote",itemScores[0][0].quote)
                                     updateQuote(itemScores[0][0].favid, itemScores[0][0].quote)
                                     GM_setValue(getDate()+' result','当前体力已全部加完!')
                                     message.push('当前体力已全部加完!\n')
@@ -355,8 +507,6 @@ let refresh = GM_getValue('refresh',600000);//定时刷新页面，单位毫秒�
                                 RateRecord[i].tid.unshift(replys[0].tid) //记录本次tid
                                 RateRecord[i].pid.unshift(replys[0].pid) //记录本次pid
                             }else {
-                                //GM_setValue(getDate()+" end itemScores[0][0].score",itemScores[0][0].score)
-                                //GM_setValue(getDate()+" end itemScores[0][0].quote",itemScores[0][0].quote)
                                 updateQuote(itemScores[0][0].favid, itemScores[0][0].quote) //*可能存在page=50 score>0不更新的bug
                                 break body
                             }
@@ -370,7 +520,7 @@ let refresh = GM_getValue('refresh',600000);//定时刷新页面，单位毫秒�
             if(mark){GM_setValue('RateRecord',RateRecord)}
             GM_setValue('Status',"Off")
             alert(message.join(''))
-            if(Timer == null && Autotime>0){Timer = setInterval(AutoTimer,Autotime)} //重启倒计时冷却
+            if(Cooldown>0 && Timer == null && Autotime>0){Timer = setInterval(AutoTimer,Autotime)} //重启倒计时冷却
         }else{
             clearInterval(Timer)
             Timer = null
@@ -523,7 +673,7 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
 <div id="setting" style="position:fixed;z-index:201;">
 <table cellpadding="0" cellspacing="0"><tbody><tr><td class="t_l"></td><td class="t_c" style="cursor:move" onmousedown="dragMenu($('setting'), event, 1)"></td>
 <td class="t_r"></td></tr><tr><td class="m_l" style="cursor:move" onmousedown="dragMenu($('setting'), event, 1)"></td>
-<td class="m_c" style="width:700px;">
+<td class="m_c" style="width:750px;">
 <span><a href="javascript:;" class="flbc" id="setting_hide" >关闭</a></span>
 <form>
 <div style="line-height:20px; font-size:13px;padding:5px; clear:both; margin-top:5px;margin-left:5px;width:500px">
@@ -536,6 +686,8 @@ Keylol：<a href="https://keylol.com/t660000-1-1">https://keylol.com/t660000-1-1
 
 <div class="o pns"><button type="button" id="main">手动执行脚本</button><div>手动执行一次加体力操作</div></div>
 
+<div class="o pns"><button type="button" id="debug_main">设置运行模式</button><div>是否开始debug加体力模式 0:正常运行速度，如遇bug需自行查看控制台 1:运行速度变慢，但较稳定，适合新手 默认0。</div></div>
+
 <div class="o pns"><button type="button" id="update_log">显示更新日志</button><div>显示脚本更新日志</div></div>
 
 <div class="o pns"><button type="button" id="autotime">设置倒计时</button><div>自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示，默认1000。</div></div>
@@ -546,13 +698,15 @@ Keylol：<a href="https://keylol.com/t660000-1-1">https://keylol.com/t660000-1-1
 
 <div class="o pns"><button type="button" id="precise">精确倒计时</button><div>精确体力冷却倒计时 0:只在初始化时获取一次冷却时间 1:每个刷新周期获取一次冷却时间，默认1。</div></div>
 
-<div class="o pns"><button type="button" id="logs">导出体力记录</button><div>以文本形式导出所有存储在本地的加体力记录。</div></div>
+<div class="o pns"><button type="button" id="logs">导出体力文本</button><div>以文本形式导出所有存储在本地的加体力记录。</div></div>
 
 <div class="o pns"><button type="button" id="logs_link">导出体力链接</button><div>以链接形式导出所有存储在本地的加体力记录。</div></div>
 
 <div class="o pns"><button type="button" id="logs_all">导出调试信息</button><div>导出所有存储在本地的脚本运行调试信息，包含加体力记录文本。</div></div>
 
 <div class="o pns"><button type="button" id="reset">脚本强制复位</button><div>当脚本异常退出无法执行时可点击此按钮强制复位，后再手动执行脚本</div></div>
+
+<div class="o pns"><button type="button" id="position">设置面板位置</button><div>设置刷新页面后面板位置 0:固定面板位置 1:点击关闭按钮时记录面板位置 -1:恢复默认位置(不影响是否固定)，默认0。</div></div>
 </form></td>
 <td class="m_r" style="cursor:move" onmousedown="dragMenu($('setting'), event, 1)"></td></tr>
 <tr><td class="b_l"></td><td class="b_c" style="cursor:move" onmousedown="dragMenu($('setting'), event, 1)"></td><td class="b_r"></td>
@@ -561,16 +715,24 @@ Keylol：<a href="https://keylol.com/t660000-1-1">https://keylol.com/t660000-1-1
 </table>
 </div>
 `)
-            $('#setting').css({"position":"fixed","z-index":"201","left":"360px","top":"120px"}) //*不知道为什么这段必须通过.css()添加为style不能通过.addClass()添加为class，否则Div无法被拖动，可能和论坛的dragMenu函数有关
+            let left=GM_getValue('setting left',"360px")
+            let top=GM_getValue('setting top',"80px")
+            $('#setting').css({"position":"fixed","z-index":"201","left":left,"top":top}) //*不知道为什么这段必须通过.css()添加为style不能通过.addClass()添加为class，否则Div无法被拖动，可能和论坛的dragMenu函数有关
             $('.o.pns>button').addClass("pn pnc z setting_button") //设置div_button添加css
             $('.o.pns').addClass("setting_div_left setting_div_height") //设置div添加css
             $('.o.pns:last').removeClass("setting_div_height") //设置最后一个div移除高度css
             $('.o.pns>div').addClass("setting_div_div") //设置div_div添加css
             $('.m_c>span').addClass("hide_button") //关闭按钮添加css
-
             $('#version').html("Version:"+version) //显示版本号
 
-            $('#setting_hide').on("click",function(){$('#setting').hide()}) //设置面板关闭按钮点击事件
+            $('#setting_hide').on("click",function(){
+                if(position){
+                    let left_=$('#setting').css("left")
+                    let top_=$('#setting').css("top")
+                    if (GM_getValue('setting left') != left_){GM_setValue(`setting left`,left_)}
+                    if (GM_getValue('setting top') != top_){GM_setValue(`setting top`,top_)}
+                }
+                $('#setting').hide()}) //设置面板关闭按钮点击事件
 
             $('#main').on("click",function(){main()}) //手动执行脚本点击事件
 
@@ -623,6 +785,49 @@ Keylol：<a href="https://keylol.com/t660000-1-1">https://keylol.com/t660000-1-1
                 }
             })
 
+            $('#debug_main').on("click",function(){ //设置运行模式点击事件
+                let i
+                if(debug_main){i=1}else{i=0}
+                let debug_main_=prompt("是否开始debug加体力模式 0:正常运行速度，如遇bug需自行查看控制台 1:运行速度变慢，但较稳定，适合新手 默认0。",i)
+                if (debug_main_!=null && debug_main_!=""){
+                    switch(debug_main_){
+                        case "1":
+                            debug_main = true
+                            GM_setValue("debug_main", debug_main)
+                            break
+                        case "0":
+                            debug_main = false
+                            GM_setValue("debug_main", debug_main)
+                            break
+                        default:
+                            alert("Error\n设置运行模式输入错误，请输入0或1")
+                    }
+                }
+            })
+
+            $('#position').on("click",function(){ //设置面板位置点击事件
+                let i
+                if(position){i=1}else{i=0}
+                let position_=prompt("设置刷新页面后面板位置 0:固定面板位置 1:点击关闭按钮时记录面板位置 -1：恢复默认位置(不影响是否固定)，默认0。",i)
+                if (position_!=null && position_!=""){
+                    switch(position_){
+                        case "1":
+                            position=true
+                            GM_setValue("position", position)
+                            break
+                        case "0":
+                            position=false
+                            GM_setValue("position", position)
+                            break
+                        case "-1":
+                            for (let log of GM_listValues()){if(log.slice(-4)=="left" || log.slice(-3)=="top"){GM_deleteValue(log)}}
+                            break
+                        default:
+                            alert("Error\n设置面板位置输入错误，请输入0或1或-1")
+                    }
+                }
+            })
+
             $('#delay').on("click",function(){ //倒计时延迟点击事件
                 let delay_=prompt("自定义24小时体力冷却完毕后再次加体力时延迟，单位毫秒,最小为0，默认5000。",delay)
                 if (delay_!=null && delay_!=""){
@@ -637,9 +842,20 @@ Keylol：<a href="https://keylol.com/t660000-1-1">https://keylol.com/t660000-1-1
             })
 
             $('#reset').on("click",function(){ //脚本强制复位点击事件
-                GM_setValue("Status","Off")
-                alert("脚本已强制复位，已可手动执行脚本，如再次异常退出请联系作者提交异常情况。")
+                if(GM_getValue("Status")!="Off"){
+                    GM_setValue("Status","Off")
+                    GM_setValue(getDate()+' reset','用户强制复位脚本')
+                    alert("脚本已强制复位，已可手动执行脚本，如再次异常退出请联系作者提交异常情况。")}
+                else{alert("脚本正常无须强制复位")}
             })
+
+            $("#logs").on("click",()=>{New_Div("log_history","体力记录文本",export_log_history("text"))}) //导出体力文本点击事件
+
+            $('#logs_link').on("click",()=>{New_Div("log_history_link","体力记录链接",export_log_history("link"))}) //导出体力链接点击事件
+
+            $('#logs_all').on("click",()=>{New_Div("log_all","脚本调试信息",export_logs_all())}) //导出调试信息点击事件
+
+            $('#update_log').on('click',()=>{New_Div("update_logs","更新日志",update_logs)}) //显示更新日志点击事件
 
             function export_log_history(method){ //导出体力记录
                 let logs_=GM_listValues()
@@ -662,66 +878,39 @@ Keylol：<a href="https://keylol.com/t660000-1-1">https://keylol.com/t660000-1-1
                 return results
             }
 
-            $("#logs").on("click",function logs(){
-                let id="log_history"
-                if($(`#${id}`).length>0){
-                    $(`#${id}`).toggle()
-                }else{
-                    $("body").append(addDiv(id))
-                    $(`#${id}`).css({"position":"fixed","z-index":"201","left":"450px","top":"40px"})//Div窗口添加css
-                    $(`#${id+"_text"}`).addClass("div_text")//文本添加css
-                    $(`#${id+"_text"}`).html(export_log_history("text")) //显示文本
-                    $(`#${id+"_em"}`).html("体力记录文本") //显示标题
-                    $(`#${id+"_hide"}`).on("click",function(){$(`#${id}`).hide()})} //关闭按钮点击事件
-            })
+            function export_logs_all(){ //导出调试信息
+                let logs_=GM_listValues()
+                let results=[]
+                for (let log of logs_){
+                    let log_string=GM_getValue(log)
+                    if(typeof log_string == "object"){log_string=JSON.stringify(log_string).replace(/,/g,",\n").replace(/\[/g,"[\n").replace(/\{/g,"{\n")} //object对象文本化
+                    results.push(log+" : "+log_string+"\n")
+                }
+                return results
+            }
 
-            $('#logs_link').on("click",function logs(){
-                let id="log_history_link"
+            function New_Div(id,tittle,text){ //初始化Div
                 if($(`#${id}`).length>0){
                     $(`#${id}`).toggle()
+                    $(`#${id+"_text"}`).html(text) //动态更新文本
                 }else{
+                    let left=GM_getValue(`${id} left`,"320px")
+                    let top=GM_getValue(`${id} top`,"40px")
                     $("body").append(addDiv(id)) //添加Div窗口
-                    $(`#${id}`).css({"position":"fixed","z-index":"201","left":"450px","top":"40px"})//Div窗口添加css
+                    $(`#${id}`).css({"position":"fixed","z-index":"201","left":left,"top":top})//Div窗口添加css
+                    $(`#${id+"_em"}`).html(tittle) //显示标题
+                    $(`#${id+"_text"}`).html(text) //显示文本
                     $(`#${id+"_text"}`).addClass("div_text")//文本添加css
-                    $(`#${id+"_text"}`).html(export_log_history("link")) //显示文本
-                    $(`#${id+"_em"}`).html("体力记录链接") //显示标题
-                    $(`#${id+"_hide"}`).on("click",function(){$(`#${id}`).hide()})} //关闭按钮点击事件
-            })
-
-            $('#logs_all').on("click",function logs(){
-                let id="log_all"
-                if($(`#${id}`).length>0){
-                    $(`#${id}`).toggle()
-                }else{
-                    $("body").append(addDiv(id)) //添加Div窗口
-
-                    let logs_=GM_listValues()
-                    let results=[]
-                    for (let log of logs_){
-                        let log_string=GM_getValue(log)
-                        if(typeof log_string == "object"){log_string=JSON.stringify(log_string).replace(/,/g,",\n").replace(/\[/g,"[\n").replace(/\{/g,"{\n")} //object对象文本化
-                        results.push(log+" : "+log_string+"\n")
-                    }
-
-                    $(`#${id}`).css({"position":"fixed","z-index":"201","left":"450px","top":"40px"})//Div窗口添加css
-                    $(`#${id+"_text"}`).addClass("div_text")//文本添加css
-                    $(`#${id+"_text"}`).html(results) //显示文本
-                    $(`#${id+"_em"}`).html("脚本调试信息") //显示标题
-                    $(`#${id+"_hide"}`).on("click",function(){$(`#${id}`).hide()})} //关闭按钮点击事件
-            })
-
-            $('#update_log').on('click',function(){ //显示更新日志点击事件
-                let id="update_logs"
-                if($(`#${id}`).length>0){
-                    $(`#${id}`).toggle()
-                }else{
-                    $("body").append(addDiv(id)) //添加Div窗口
-                    $(`#${id}`).css({"position":"fixed","z-index":"201","left":"320px","top":"40px"})//Div窗口添加css
-                    $(`#${id+"_em"}`).html("更新日志") //显示标题
-                    $(`#${id+"_text"}`).addClass('div_text') //文本添加css
-                    $(`#${id+"_text"}`).html(update_logs) //显示文本
-                    $(`#${id+"_hide"}`).on("click",function(){$(`#${id}`).hide()})} //关闭按钮点击事件
-            })
+                    $(`#${id+"_hide"}`).on("click",function(){ //关闭按钮点击事件
+                        if(position){
+                            let left_=$(`#${id}`).css("left")
+                            let top_=$(`#${id}`).css("top")
+                            if (GM_getValue(`${id} left`) != left_){GM_setValue(`${id} left`,left_)}
+                            if (GM_getValue(`${id} top`) != top_){GM_setValue(`${id} top`,top_)}
+                        }
+                        $(`#${id}`).hide()})
+                }
+            }
 
             function addDiv(id){ //添加Div窗口
                 return `
@@ -730,17 +919,15 @@ Keylol：<a href="https://keylol.com/t660000-1-1">https://keylol.com/t660000-1-1
 <td class="t_r"></td></tr><tr><td class="m_l" style="cursor:move" onmousedown="dragMenu($('${id}'), event, 1)"></td>
 <td class="m_c"><h3 class="flb" style="cursor: move;" onmousedown="dragMenu($('${id}'), event, 1)">
 <em id="${id+"_em"}"></em>
+
 <span><a href="javascript:;" class="flbc" id="${id+"_hide"}" >关闭</a></span>
-</h3>
-<form><div class="pbt cl">
+
+</h3><form><div class="pbt cl">
+
 <pre id="${id+"_text"}"></pre>
-</div></form></td>
-<td class="m_r" style="cursor:move" onmousedown="dragMenu($('${id}'), event, 1)"></td></tr>
-<tr><td class="b_l"></td><td class="b_c" style="cursor:move" onmousedown="dragMenu($('${id}'), event, 1)"></td><td class="b_r"></td>
-</tr>
-</tbody>
-</table>
-</div>`
+
+</div></form></td><td class="m_r" style="cursor:move" onmousedown="dragMenu($('${id}'), event, 1)"></td></tr>
+<tr><td class="b_l"></td><td class="b_c" style="cursor:move" onmousedown="dragMenu($('${id}'), event, 1)"></td><td class="b_r"></td></tr></tbody></table></div>`
             }
         }}
 })();

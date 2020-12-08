@@ -90,13 +90,13 @@ c.每次增加体力前获取一次体力信息(因功能取舍/逻辑问题更�
 `
 const version="1.2.3-DreamNya"
 
-let Autotime = GM_getValue('Autotime',1000) //自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示。
-let HideAutoRate = GM_getValue('HideAutoRate',false) //显示体力冷却时是否隐藏Autorate文字 true:hh:mm:ss / false:Autorate hh:mm:ss
-let delay = GM_getValue('delay',5000) //自定义24小时体力冷却完毕后再次加体力时延迟
-let PreciseCooldown = GM_getValue('PreciseCooldown',true) //精确体力冷却倒计时 false:只在初始化时获取一次冷却时间 true:每个刷新周期获取一次冷却时间
-let refresh = GM_getValue('refresh',600000) //定时刷新页面，单位毫秒，0为不刷新
-let position = GM_getValue('position', false) //设置刷新页面后面板位置 0:固定面板位置 1:点击关闭按钮时记录面板位置 -1：恢复默认位置(不影响是否固定)
-let debug_main = GM_getValue('debug_main',false) //是否开始debug加体力模式 false:正常运行速度，如遇bug需自行查看控制台 true:运行速度变慢，但较稳定，适合新手
+let Autotime = GM_getValue('Autotime',1000); //自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示。
+let HideAutoRate = GM_getValue('HideAutoRate',false); //显示体力冷却时是否隐藏Autorate文字 true:hh:mm:ss / false:Autorate hh:mm:ss
+let delay = GM_getValue('delay',5000); //自定义24小时体力冷却完毕后再次加体力时延迟
+let PreciseCooldown = GM_getValue('PreciseCooldown',true); //精确体力冷却倒计时 false:只在初始化时获取一次冷却时间 true:每个刷新周期获取一次冷却时间
+let refresh = GM_getValue('refresh',600000); //定时刷新页面，单位毫秒，0为不刷新
+let position = GM_getValue('position', false); //设置刷新页面后面板位置 0:固定面板位置 1:点击关闭按钮时记录面板位置 -1：恢复默认位置(不影响是否固定)
+let debug_main = GM_getValue('debug_main',false); //是否开始debug加体力模式 false:正常运行速度，如遇bug需自行查看控制台 true:运行速度变慢，但较稳定，适合新手
 //const debug = 3; //0:不存储除体力冷却体力操作以外的任何信息 1:存储有限debug信息 2:存储大量debug信息 3:1+2
 //提示：原自定义常量设置现已加入设置面板，如需手动修改可至脚本存储处`
 

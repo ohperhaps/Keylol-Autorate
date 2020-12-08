@@ -4,7 +4,7 @@
 // @include      https://keylol.com/forum.php
 // @include      https://keylol.com/
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
-// @version      1.2.2-DreamNya
+// @version      1.2.3-DreamNya
 // @icon         https://raw.githubusercontent.com/DreamNya/Keylol-Autorate/DreamNya-patch-1/img/konoha.png
 // @downloadURL	 https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js
 // @updateURL	 https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js
@@ -20,7 +20,14 @@
 // @run-at       document-end
 // ==/UserScript==
 const update_logs=
-`9.version 1.2.2-DreamNya(2020-12-01)
+`10.version 1.2.3-DreamNya(2020-12-08)
+a.修复启用精确冷却倒计时时开启多页面造成的毫秒级重复加体冲突
+b.现已加入随机标识符辨别脚本运行次数
+c.优化检测剩余体力速度
+d.优化面板按钮代码
+e.增加及取消注释某些debug，降低作者答疑难度
+
+9.version 1.2.2-DreamNya(2020-12-01)
 a.体力冷却异常增加防御措施，现在不会无限提示无体力了
 b.main()函数增加try catch防御措施，以防万一,但运行速度变慢，自行选择
 c.现在每加完一个回复的体力就更新一次收藏说明，而不是以前的加完全部回复才更新，防止异常漏更新
@@ -79,31 +86,31 @@ a.同时多个收藏贴只会平均体力，快加完其中一个时，不会优
 计划中：
 a.增加存储debug信息开关。目前需要手动删除debug注释(暂无计划更新)
 b.uid体力加完后一段时间自动清理(暂无计划更新)
-d.每次增加体力前获取一次体力信息(因功能取舍/逻辑问题更新推迟)
+c.每次增加体力前获取一次体力信息(因功能取舍/逻辑问题更新推迟)
 `
-const version="1.2.2-DreamNya";
+const version="1.2.3-DreamNya"
 
-let Autotime = GM_getValue('Autotime',1000); //自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示。
-let HideAutoRate = GM_getValue('HideAutoRate',false); //显示体力冷却时是否隐藏Autorate文字 true:hh:mm:ss / false:Autorate hh:mm:ss
-let delay = GM_getValue('delay',5000); //自定义24小时体力冷却完毕后再次加体力时延迟
-let PreciseCooldown = GM_getValue('PreciseCooldown',true); //精确体力冷却倒计时 false:只在初始化时获取一次冷却时间 true:每个刷新周期获取一次冷却时间
-let refresh = GM_getValue('refresh',600000);//定时刷新页面，单位毫秒，0为不刷新
-let position = GM_getValue('position', false);//设置刷新页面后面板位置 0:固定面板位置 1:点击关闭按钮时记录面板位置 -1：恢复默认位置(不影响是否固定)
-let debug_main = GM_getValue('debug_main',false);//是否开始debug加体力模式 false:正常运行速度，如遇bug需自行查看控制台 true:运行速度变慢，但较稳定，适合新手
+let Autotime = GM_getValue('Autotime',1000) //自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示。
+let HideAutoRate = GM_getValue('HideAutoRate',false) //显示体力冷却时是否隐藏Autorate文字 true:hh:mm:ss / false:Autorate hh:mm:ss
+let delay = GM_getValue('delay',5000) //自定义24小时体力冷却完毕后再次加体力时延迟
+let PreciseCooldown = GM_getValue('PreciseCooldown',true) //精确体力冷却倒计时 false:只在初始化时获取一次冷却时间 true:每个刷新周期获取一次冷却时间
+let refresh = GM_getValue('refresh',600000) //定时刷新页面，单位毫秒，0为不刷新
+let position = GM_getValue('position', false) //设置刷新页面后面板位置 0:固定面板位置 1:点击关闭按钮时记录面板位置 -1：恢复默认位置(不影响是否固定)
+let debug_main = GM_getValue('debug_main',false) //是否开始debug加体力模式 false:正常运行速度，如遇bug需自行查看控制台 true:运行速度变慢，但较稳定，适合新手
 //const debug = 3; //0:不存储除体力冷却体力操作以外的任何信息 1:存储有限debug信息 2:存储大量debug信息 3:1+2
 //提示：原自定义常量设置现已加入设置面板，如需手动修改可至脚本存储处`
 
 
 (function() {
     'use strict';
-    const $ = unsafeWindow.jQuery;
-    const homePage = "https://keylol.com/";
+    const $ = unsafeWindow.jQuery
+    const homePage = "https://keylol.com/"
     const selfUid = $("li.dropdown").find("a").attr("href").split("-")[1]
-    const formHash = $("[name=formhash]").val();
+    const formHash = $("[name=formhash]").val()
     let auto_refresh=0 //记录脚本运行时间
-    let debug_Error=0 //记录本次main()运行次数
     let init = GM_getValue('Ratetime')
     let init_time=new Date().getTime()
+    let uuid=random_uuid() //脚本运行标识符
 
     if (init){ //初始化倒计时
         var Cooldown=init+86400000+delay-init_time //获取体力冷却时间
@@ -119,6 +126,14 @@ let debug_main = GM_getValue('debug_main',false);//是否开始debug加体力模
         var views_Timer =setInterval(views_onload,1000)
         }
 
+    function random_uuid(){ //随机标识符
+        let random_string="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+        let result=""
+        for (let i=0;i<5;++i){
+            result += random_string.charAt(Math.floor(Math.random() * random_string.length))
+        }
+        return result
+    }
 
     function xhrAsync (url, method="GET", data="") {
         if (method === "GET") {
@@ -148,22 +163,29 @@ let debug_main = GM_getValue('debug_main',false);//是否开始debug加体力模
         }
     }
     async function getUserScore() {
-        let threads = await xhrAsync(`forum.php?mod=guide&view=newthread`).then((res) => {
-            let threads = []
-            $("div.bm_c", res.response).find("tbody").each(function () { threads.push($(this).attr("id").split("_").pop()) })
-            return threads })
-        for (let thread of threads) {
-            let posts = await xhrAsync(`t${thread}-1-1`).then((res) => {
-                let posts = []
-                $("#postlist > div[id^=post_]", res.response).each(function () { posts.push($(this).attr("id").split("_").pop()) })
-                return posts
-            })
-            for (let post of posts) {
-                let ts = (new Date()).getTime()
-                let score = await xhrAsync(`forum.php?mod=misc&action=rate&tid=${thread}&pid=${post}&infloat=yes&handlekey=rate&t=${ts}&inajax=1&ajaxtarget=fwin_content_rate`).then((res) => {
-                    return $("table.dt.mbm td:last", res.response).text()
+        let ts_ = (new Date()).getTime()
+        let score_ = await xhrAsync(
+            `forum.php?mod=misc&action=rate&tid=7800&pid=106186&infloat=yes&handlekey=rate&t=${ts_}&inajax=1&ajaxtarget=fwin_content_rate` //选用了一个没人加过体的古老帖子检测剩余体力，加快检测速度
+                                   ).then((res) => { return $("table.dt.mbm td:last", res.response).text() })
+        if (/^\d+$/.test(score_)) { return parseInt(score_) }
+        else{
+            let threads = await xhrAsync(`forum.php?mod=guide&view=newthread`).then((res) => {
+                let threads = []
+                $("div.bm_c", res.response).find("tbody").each(function () { threads.push($(this).attr("id").split("_").pop()) })
+                return threads })
+            for (let thread of threads) {
+                let posts = await xhrAsync(`t${thread}-1-1`).then((res) => {
+                    let posts = []
+                    $("#postlist > div[id^=post_]", res.response).each(function () { posts.push($(this).attr("id").split("_").pop()) })
+                    return posts
                 })
-                if (/^\d+$/.test(score)) { return parseInt(score) }
+                for (let post of posts) {
+                    let ts = (new Date()).getTime()
+                    let score = await xhrAsync(`forum.php?mod=misc&action=rate&tid=${thread}&pid=${post}&infloat=yes&handlekey=rate&t=${ts}&inajax=1&ajaxtarget=fwin_content_rate`).then((res) => {
+                        return $("table.dt.mbm td:last", res.response).text()
+                    })
+                    if (/^\d+$/.test(score)) { return parseInt(score) }
+                }
             }
         }
     }
@@ -249,6 +271,7 @@ let debug_main = GM_getValue('debug_main',false);//是否开始debug加体力模
         formData.append("favid", favid)
         formData.append("quote", quote)
         return xhrAsync(`plugin.php?id=keylol_favorite_notification:favorite_enhance&formhash=${formHash}`, "POST", formData).then((res) => {
+            GM_setValue(getDate()+' updateQuote',res.responseText)
             return res.responseText
         })
     }
@@ -274,11 +297,20 @@ let debug_main = GM_getValue('debug_main',false);//是否开始debug加体力模
         })
     }
 
-    function main(){
-        if(debug_main){
-            main_debug()
+    function main(Auto=false){
+        if (Auto){
+            GM_setValue(getDate()+' main','自动执行脚本')
+            if(debug_main){main_debug()}else{main_normal()}
         }else{
-            main_normal()
+            let status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
+            if (status == "Off"){
+                GM_setValue('Status',uuid)
+                GM_setValue(getDate()+' main','手动执行脚本')
+                if(debug_main){main_debug()}else{main_normal()}
+            }else{
+                GM_setValue(getDate()+' Error','手动加体力 检测到脚本重复运行')
+                alert("Error\n手动加体力 检测到脚本重复运行\n如脚本异常退出请手动强制复位")
+            }
         }
     }
 
@@ -289,12 +321,12 @@ let debug_main = GM_getValue('debug_main',false);//是否开始debug加体力模
         let RateRecord=GM_getValue('RateRecord',[]) //读取tid pid记录
         let i=0 //根据uid获取RateRecord存储序号
         let mark=false //正常运行标记
-        let status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
+        let status = GM_getValue('Status') //检测加体力状态 防止重复运行
         GM_setValue(getDate(),"debug main")
         try{
-            if (status == "Off"){
+            if (status == uuid){
                 GM_setValue('Status',"On") //防止重复运行标记
-                //GM_setValue(getDate()+' itemScores',itemScores)
+                GM_setValue(getDate()+' itemScores',itemScores)
                 if (itemScores[0].length === 0) {
                     message.push('未找到正确格式的收藏帖子！\n')
                     GM_setValue(getDate()+' result','未找到正确格式的收藏帖子！')
@@ -350,6 +382,12 @@ let debug_main = GM_getValue('debug_main',false);//是否开始debug加体力模
                                                      pid:pid}]
                                         i=0
                                     }
+                                    if (GM_getValue('Status') != uuid){ //最后一道检测重复运行防线
+                                        GM_setValue(getDate()+' Error','uuid不匹配2 检测到脚本重复运行')
+                                        mark=false
+                                        message.push('Error\nuuid不匹配2 检测到脚本重复运行\n如脚本异常退出请手动强制复位\n')
+                                        break body
+                                    }
                                     let rate_result = await rate(replys[0].tid, replys[0].pid, attend, new_quote)
                                     /*GM_setValue(getDate()+" rate_log",{replys_tid: replys[0].tid,
                                                           replys_pid: replys[0].pid,
@@ -397,10 +435,8 @@ let debug_main = GM_getValue('debug_main',false);//是否开始debug加体力模
             }else{
                 clearInterval(Timer)
                 Timer = null
-                GM_setValue(getDate()+' Error','检测到脚本重复运行')
-                debug_Error++
-                if(debug_Error>=2){GM_setValue('Status',"Off")}
-                alert("Error 检测到脚本重复运行\n如脚本异常退出清再点击"+(3-debug_Error)+"次按钮强制运行脚本\n")
+                GM_setValue(getDate()+' Error','uuid不匹配 检测到脚本重复运行')
+                alert("Error\nuuid不匹配 检测到脚本重复运行\n如脚本异常退出请手动强制复位\n")
             }
         }
         catch(error){
@@ -419,9 +455,8 @@ let debug_main = GM_getValue('debug_main',false);//是否开始debug加体力模
         let mark=false //正常运行标记
         let status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
         GM_setValue(getDate(),"normal main")
-        if (status == "Off"){
-            GM_setValue('Status',"On") //防止重复运行标记
-            //GM_setValue(getDate()+' itemScores',itemScores)
+        if (status == uuid){
+            GM_setValue(getDate()+' itemScores',itemScores)
             if (itemScores[0].length === 0) {
                 message.push('未找到正确格式的收藏帖子！\n')
                 GM_setValue(getDate()+' result','未找到正确格式的收藏帖子！')
@@ -477,6 +512,12 @@ let debug_main = GM_getValue('debug_main',false);//是否开始debug加体力模
                                                  pid:pid}]
                                     i=0
                                 }
+                                if (GM_getValue('Status') != uuid){ //最后一道检测重复运行防线
+                                    GM_setValue(getDate()+' Error','uuid不匹配2 检测到脚本重复运行')
+                                    mark=false
+                                    message.push('Error\nuuid不匹配2 检测到脚本重复运行\n如脚本异常退出请手动强制复位\n')
+                                    break body
+                                }
                                 let rate_result = await rate(replys[0].tid, replys[0].pid, attend, new_quote)
                                 /*GM_setValue(getDate()+" rate_log",{replys_tid: replys[0].tid,
                                                           replys_pid: replys[0].pid,
@@ -524,16 +565,14 @@ let debug_main = GM_getValue('debug_main',false);//是否开始debug加体力模
         }else{
             clearInterval(Timer)
             Timer = null
-            GM_setValue(getDate()+' Error','检测到脚本重复运行')
-            debug_Error++
-            if(debug_Error>=2){GM_setValue('Status',"Off")}
-            alert("Error 检测到脚本重复运行\n如脚本异常退出清再点击"+(3-debug_Error)+"次按钮强制运行脚本\n")
+            GM_setValue(getDate()+' Error','uuid不匹配 检测到脚本重复运行')
+            alert("Error\nuuid不匹配 检测到脚本重复运行\n如脚本异常退出请手动强制复位\n")
         }
     }
 
     function getDate(){
         return [new Date().getFullYear(),check(new Date().getMonth()+1),check(new Date().getDate())].join('-')+' '+[check(new Date().getHours()),check(new Date().
-getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMilliseconds())].join(':')
+getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMilliseconds())].join(':')+' '+uuid
     }
     function getRateRecord(RateRecord,uid){ //读取uid记录
         let i = 0
@@ -581,12 +620,17 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
         if (Cooldown <0) { //判断体力冷却是否结束
             let time_debug =new Date().getTime()
             Cooldown=GM_getValue('Ratetime')+86400000+delay-time_debug //精确冷却时间
-            let status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
             if (Cooldown <1){
-                //GM_setValue(time_debug, Cooldown) //记录加体力时间
                 clearInterval(Timer)
                 Timer = null
-                main()
+                let status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
+                if (status == "Off"){
+                    GM_setValue('Status',uuid)
+                    main(true)
+                }else{
+                    GM_setValue(getDate()+' Error','自动加体力 检测到脚本重复运行')
+                    alert("Error\n自动加体力 检测到脚本重复运行\n如脚本异常退出请手动强制复位")
+                }
             }else{
                 location.reload()
             }
@@ -673,9 +717,9 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
 <div id="setting" style="position:fixed;z-index:201;">
 <table cellpadding="0" cellspacing="0"><tbody><tr><td class="t_l"></td><td class="t_c" style="cursor:move" onmousedown="dragMenu($('setting'), event, 1)"></td>
 <td class="t_r"></td></tr><tr><td class="m_l" style="cursor:move" onmousedown="dragMenu($('setting'), event, 1)"></td>
-<td class="m_c" style="width:750px;">
+<td class="m_c" style="width:780px;">
 <span><a href="javascript:;" class="flbc" id="setting_hide" >关闭</a></span>
-<form>
+<form id="panel_form">
 <div style="line-height:20px; font-size:13px;padding:5px; clear:both; margin-top:5px;margin-left:5px;width:500px">
 <b>自动加体力脚本Keylol-Autorate</b>
 <div id="version">Version:</div>
@@ -683,30 +727,6 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
 Github：<a href="https://github.com/DreamNya/Keylol-Autorate">https://github.com/DreamNya/Keylol-Autorate</a><br>
 Keylol：<a href="https://keylol.com/t660000-1-1">https://keylol.com/t660000-1-1</a><br>
 </div>
-
-<div class="o pns"><button type="button" id="main">手动执行脚本</button><div>手动执行一次加体力操作</div></div>
-
-<div class="o pns"><button type="button" id="debug_main">设置运行模式</button><div>是否开始debug加体力模式 0:正常运行速度，如遇bug需自行查看控制台 1:运行速度变慢，但较稳定，适合新手 默认0。</div></div>
-
-<div class="o pns"><button type="button" id="update_log">显示更新日志</button><div>显示脚本更新日志</div></div>
-
-<div class="o pns"><button type="button" id="autotime">设置倒计时</button><div>自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示，默认1000。</div></div>
-
-<div class="o pns"><button type="button" id="hideautorate">初始化失败</button><div>体力冷却倒计时时显示或隐藏Autorate文字 显示:hh:mm:ss / 隐藏:Autorate hh:mm:ss</div></div>
-
-<div class="o pns"><button type="button" id="delay">倒计时延迟</button><div>自定义24小时体力冷却完毕后再次加体力时延迟，单位毫秒，最小为0，默认5000。</div></div>
-
-<div class="o pns"><button type="button" id="precise">精确倒计时</button><div>精确体力冷却倒计时 0:只在初始化时获取一次冷却时间 1:每个刷新周期获取一次冷却时间，默认1。</div></div>
-
-<div class="o pns"><button type="button" id="logs">导出体力文本</button><div>以文本形式导出所有存储在本地的加体力记录。</div></div>
-
-<div class="o pns"><button type="button" id="logs_link">导出体力链接</button><div>以链接形式导出所有存储在本地的加体力记录。</div></div>
-
-<div class="o pns"><button type="button" id="logs_all">导出调试信息</button><div>导出所有存储在本地的脚本运行调试信息，包含加体力记录文本。</div></div>
-
-<div class="o pns"><button type="button" id="reset">脚本强制复位</button><div>当脚本异常退出无法执行时可点击此按钮强制复位，后再手动执行脚本</div></div>
-
-<div class="o pns"><button type="button" id="position">设置面板位置</button><div>设置刷新页面后面板位置 0:固定面板位置 1:点击关闭按钮时记录面板位置 -1:恢复默认位置(不影响是否固定)，默认0。</div></div>
 </form></td>
 <td class="m_r" style="cursor:move" onmousedown="dragMenu($('setting'), event, 1)"></td></tr>
 <tr><td class="b_l"></td><td class="b_c" style="cursor:move" onmousedown="dragMenu($('setting'), event, 1)"></td><td class="b_r"></td>
@@ -715,8 +735,25 @@ Keylol：<a href="https://keylol.com/t660000-1-1">https://keylol.com/t660000-1-1
 </table>
 </div>
 `)
+            function addform(id,tittle,text){ //添加面板按钮
+                $('#panel_form').append(`<div class="o pns"><button type="button" id="${id}">${tittle}</button><div>${text}</div></div>`)
+            }
+
+            addform("main" ,"手动执行脚本",`手动执行一次加体力操作 提示：在脚本自动弹出结果对话框前请耐心等待，切勿关闭或刷新页面以免脚本异常运行。`)
+            addform("debug_main" , "设置运行模式",`是否开始debug加体力模式 0:正常运行速度，如遇bug需自行查看控制台 1:运行速度变慢，但较稳定，适合新手，默认0。`)
+            addform("update_log" , "显示更新日志",`显示脚本更新日志`)
+            addform("autotime" , "设置倒计时",`自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示，默认1000。`)
+            addform("hideautorate" , "初始化失败",`体力冷却倒计时时显示或隐藏Autorate文字 隐藏:hh:mm:ss / 显示:Autorate hh:mm:ss`)
+            addform("delay" , "倒计时延迟",`自定义24小时体力冷却完毕后再次加体力时延迟，单位毫秒，最小为0，默认5000。`)
+            addform("precise" , "精确倒计时",`精确体力冷却倒计时 0:只在初始化时获取一次冷却时间 1:每个刷新周期获取一次冷却时间，默认1。`)
+            addform("logs" , "导出体力文本",`以文本形式导出所有存储在本地的加体力记录。`)
+            addform("logs_link" , "导出体力链接",`以链接形式导出所有存储在本地的加体力记录。`)
+            addform("logs_all" , "导出调试信息",`导出所有存储在本地的脚本运行调试信息，包含加体力记录文本。`)
+            addform("reset" , "脚本强制复位",`当脚本异常退出无法执行时可点击此按钮强制复位，后再手动执行脚本`)
+            addform("position" , "设置面板位置",`设置刷新页面后面板位置 0:固定面板位置 1:点击关闭按钮时记录面板位置 -1:恢复默认位置(不影响是否固定)，默认0。`)
+
             let left=GM_getValue('setting left',"360px")
-            let top=GM_getValue('setting top',"80px")
+            let top=GM_getValue('setting top',"40px")
             $('#setting').css({"position":"fixed","z-index":"201","left":left,"top":top}) //*不知道为什么这段必须通过.css()添加为style不能通过.addClass()添加为class，否则Div无法被拖动，可能和论坛的dragMenu函数有关
             $('.o.pns>button').addClass("pn pnc z setting_button") //设置div_button添加css
             $('.o.pns').addClass("setting_div_left setting_div_height") //设置div添加css
@@ -788,7 +825,7 @@ Keylol：<a href="https://keylol.com/t660000-1-1">https://keylol.com/t660000-1-1
             $('#debug_main').on("click",function(){ //设置运行模式点击事件
                 let i
                 if(debug_main){i=1}else{i=0}
-                let debug_main_=prompt("是否开始debug加体力模式 0:正常运行速度，如遇bug需自行查看控制台 1:运行速度变慢，但较稳定，适合新手 默认0。",i)
+                let debug_main_=prompt("是否开始debug加体力模式 0:正常运行速度，如遇bug需自行查看控制台 1:运行速度变慢，但较稳定，适合新手，默认0。",i)
                 if (debug_main_!=null && debug_main_!=""){
                     switch(debug_main_){
                         case "1":

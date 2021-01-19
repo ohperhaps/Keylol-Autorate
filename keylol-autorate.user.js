@@ -4,7 +4,7 @@
 // @include      https://keylol.com/forum.php
 // @include      https://keylol.com/
 // @require      https://code.jquery.com/jquery-3.5.1.min.js#sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=
-// @version      1.2.4-DreamNya
+// @version      1.2.5-DreamNya
 // @icon         https://raw.githubusercontent.com/DreamNya/Keylol-Autorate/DreamNya-patch-1/img/konoha.png
 // @downloadURL	 https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js
 // @updateURL	 https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js
@@ -20,6 +20,9 @@
 // @run-at       document-end
 // ==/UserScript==
 const update_logs=`
+12.version 1.2.5-DreamNya(2021-1-19)
+a.进一步优化多页面冲突解决方案
+
 11.version 1.2.4-DreamNya(2020-12-23)
 a.现在多页面冲突时能正常加体力了（初步测试没有问题 可能仍有bug 需要更多反馈）
 b.加入自定义存储变量功能，方便debug，需手动修改const debug = false;为const debug = true;
@@ -93,7 +96,7 @@ a.增加存储debug信息开关。目前需要手动删除debug注释(暂无计�
 b.uid体力加完后一段时间自动清理(暂无计划更新)
 c.每次增加体力前获取一次体力信息(因功能取舍/逻辑问题更新推迟)
 `
-const version="1.2.4-DreamNya"
+const version="1.2.5-DreamNya"
 
 let Autotime = GM_getValue('Autotime',1000); //自定义体力冷却倒计时刷新周期，单位毫秒，0为关闭显示。
 let HideAutoRate = GM_getValue('HideAutoRate',false); //显示体力冷却时是否隐藏Autorate文字 true:hh:mm:ss / false:Autorate hh:mm:ss
@@ -113,10 +116,13 @@ const debug = true; //临时
     const homePage = "https://keylol.com/"
     const selfUid = $("li.dropdown").find("a").attr("href").split("-")[1]
     const formHash = $("[name=formhash]").val()
+    const init = GM_getValue('Ratetime')
+    const init_time=new Date().getTime()
+    const uuid=random_uuid() //脚本运行标识符
+    let Timer_normal
+    let Timer_debug
+    let status
     let auto_refresh=0 //记录脚本运行时间
-    let init = GM_getValue('Ratetime')
-    let init_time=new Date().getTime()
-    let uuid=random_uuid() //脚本运行标识符
 
     if (init){ //初始化倒计时
         var Cooldown=init+86400000+delay-init_time //获取体力冷却时间
@@ -277,7 +283,6 @@ const debug = true; //临时
         formData.append("favid", favid)
         formData.append("quote", quote)
         return xhrAsync(`plugin.php?id=keylol_favorite_notification:favorite_enhance&formhash=${formHash}`, "POST", formData).then((res) => {
-            GM_setValue(getDate()+' updateQuote',formData)
             return res.responseText
         })
     }
@@ -303,12 +308,12 @@ const debug = true; //临时
         })
     }
 
-    function main(Auto=false){
+    async function main(Auto=false){
         if (Auto){
             GM_setValue(getDate()+' main','自动执行脚本')
             if(debug_main){main_debug()}else{main_normal()}
         }else{
-            let status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
+            status = await GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
             if (status == "Off"){
                 GM_setValue('Status',uuid)
                 GM_setValue(getDate()+' main','手动执行脚本')
@@ -324,14 +329,13 @@ const debug = true; //临时
         let message = []
         let itemScores = await calcScores()
         let page =1
-        let RateRecord=GM_getValue('RateRecord',[]) //读取tid pid记录
+        let RateRecord=await GM_getValue('RateRecord',[]) //读取tid pid记录
         let i=0 //根据uid获取RateRecord存储序号
         let mark=false //正常运行标记
-        let status
         let fine=true
         GM_setValue(getDate(),"debug main")
         try{
-            status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
+            status = await GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
             if (status == uuid){
                 GM_setValue('Status',"On") //防止重复运行标记
                 GM_setValue(getDate()+' itemScores',itemScores)
@@ -341,7 +345,7 @@ const debug = true; //临时
                 }
                 while (itemScores[0].length >0){
                     if (itemScores[1] === 0) {
-                        Cooldown = GM_getValue('Ratetime')+86400000+delay-new Date().getTime()
+                        Cooldown = await GM_getValue('Ratetime')+86400000+delay-new Date().getTime()
                         if (Cooldown < 0){
                             Cooldown=undefined
                             GM_deleteValue('Ratetime')
@@ -391,7 +395,7 @@ const debug = true; //临时
                                                      pid:pid}]
                                         i=0
                                     }
-                                    status = GM_getValue('Status')
+                                    status = await GM_getValue('Status')
                                     if (status != uuid){ //最后一道检测重复运行防线
                                         GM_setValue(getDate()+' Error','uuid不匹配2 检测到脚本重复运行 status: '+status)
                                         mark=false
@@ -446,8 +450,13 @@ const debug = true; //临时
             }else{
                 clearInterval(Timer)
                 Timer = null
-                GM_setValue(getDate()+' Error','uuid不匹配 检测到脚本重复运行 status: '+status)
-                alert(`Error\nuuid不匹配\nuuid: ${uuid}  status:${status}\n检测到脚本重复运行\n如脚本异常退出请手动强制复位\n`)
+                GM_setValue(getDate()+' Error','uuid不匹配 检测到脚本重复运行 status: '+status+' Timer_debug: '+Timer_debug)
+                if(Timer_debug){
+                    alert(`Error\nuuid不匹配\nuuid: ${uuid}  status:${status}\n检测到脚本重复运行\n如脚本异常退出请手动强制复位\n`)
+                }else{
+                    Timer_debug=setTimeout(()=>{main_debug()},3000)
+                    GM_setValue(getDate()+' Timer_debug: ',Timer_debug)
+                }
             }
         }
         catch(error){
@@ -461,13 +470,12 @@ const debug = true; //临时
         let message = []
         let itemScores = await calcScores()
         let page =1
-        let RateRecord=GM_getValue('RateRecord',[]) //读取tid pid记录
+        let RateRecord=await GM_getValue('RateRecord',[]) //读取tid pid记录
         let i=0 //根据uid获取RateRecord存储序号
         let mark=false //正常运行标记
-        let status
         let fine=true
         GM_setValue(getDate(),"normal main")
-        status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
+        status = await GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
         if (status == uuid){
             GM_setValue(getDate()+' itemScores',itemScores)
             if (itemScores[0].length === 0) {
@@ -476,7 +484,7 @@ const debug = true; //临时
             }
             while (itemScores[0].length >0){
                 if (itemScores[1] === 0) {
-                    Cooldown = GM_getValue('Ratetime')+86400000+delay-new Date().getTime()
+                    Cooldown = await GM_getValue('Ratetime')+86400000+delay-new Date().getTime()
                     if (Cooldown < 0){
                         Cooldown=undefined
                         GM_deleteValue('Ratetime')
@@ -526,7 +534,7 @@ const debug = true; //临时
                                                  pid:pid}]
                                     i=0
                                 }
-                                status = GM_getValue('Status')
+                                status = await GM_getValue('Status')
                                 if (status != uuid){ //最后一道检测重复运行防线
                                     GM_setValue(getDate()+' Error','uuid不匹配2 检测到脚本重复运行 status: '+status)
                                     mark=false
@@ -581,8 +589,13 @@ const debug = true; //临时
         }else{
             clearInterval(Timer)
             Timer = null
-            GM_setValue(getDate()+' Error','uuid不匹配 检测到脚本重复运行 status: '+status)
-            alert(`Error\nuuid不匹配\nuuid: ${uuid}  status:${status}\n检测到脚本重复运行\n如脚本异常退出请手动强制复位\n`)
+            GM_setValue(getDate()+' Error','uuid不匹配 检测到脚本重复运行 status: '+status+' Timer_normal: '+Timer_normal)
+            if(Timer_normal){
+                alert(`Error\nuuid不匹配\nuuid: ${uuid}  status:${status}\n检测到脚本重复运行\n如脚本异常退出请手动强制复位\n`)
+            }else{
+                Timer_normal=setTimeout(()=>{main_normal()},3000)
+                GM_setValue(getDate()+' Timer_normal: ',Timer_normal)
+            }
         }
     }
 
@@ -640,7 +653,7 @@ getMinutes()),check(new Date().getSeconds()),check_mil(new Date().getMillisecond
             if (Cooldown <1){
                 clearInterval(Timer)
                 Timer = null
-                let status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
+                status = GM_getValue('Status',"Off") //检测加体力状态 防止重复运行
                 if (status == "Off"){
                     GM_setValue('Status',uuid)
                     main(true)

@@ -3,7 +3,7 @@
 ## 安装
 1.安装 [Tampermonkey](https://tampermonkey.net/)
 
-2.[点击安装](https://github.com/ohperhaps/Keylol-Autorate/raw/master/keylol-autorate.user.js) 脚本 
+2.[点击安装](https://github.com/DreamNya/Keylol-Autorate/raw/DreamNya-patch-1/keylol-autorate.user.js) 脚本 
 
 ## 使用
 1.收藏需要加体力用户的帖子，收藏说明按照`已加体力/全部体力`格式填写
@@ -28,3 +28,5 @@ A: 不影响收藏本身功能使用，脚本会自动筛选收藏说明为`<Num
 2.Q:加体力分配原则是什么？
 
 A: 尽量平分体力在多个需要加体力的帖子，无法平均时优先加快加完的帖子
+
+更多说明：见原作者发布的原帖https://keylol.com/t630781-1-1
